@@ -49,7 +49,7 @@ typedef struct _device{
 device devices[MINORS];
 
 MODULE_LICENSE("Dual BSD/GPL");
-/* Declaration of multi_flow_device.c functions */
+
 static int device_open(struct inode *inode, struct file *filp);
 static int device_release(struct inode *inode, struct file *filp);
 static ssize_t device_read(struct file *filp, char *buf, size_t count, loff_t *f_pos);
@@ -57,8 +57,26 @@ static ssize_t device_write(struct file *filp, const char *buf, size_t count, lo
 static void device_exit(void);
 static int device_init(void);
 
-/* Structure that declares the usual file */
-/* access functions */
+static int device_open(struct inode *inode, struct file *filp){
+    return 0;
+}
+static int device_release(struct inode *inode, struct file *filp){
+    return 0;
+}
+static ssize_t device_read(struct file *filp, char *buf, size_t count, loff_t *f_pos){
+    return count;
+}
+static ssize_t device_write(struct file *filp, const char *buf, size_t count, loff_t *f_pos){
+    return count;
+}
+static void device_exit(void){
+    return;
+}
+static int device_init(void){
+    return 0;
+}
+
+
 struct file_operations file_operations = {
     .read = device_read,
     .write = device_write,
