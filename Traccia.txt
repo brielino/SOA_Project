@@ -1,0 +1,21 @@
+La sua specifica è relativa a un driver di dispositivo Linux che implementa flussi di dati a bassa e alta priorità.
+Attraverso una sessione aperta sul file del dispositivo, un thread può leggere/scrivere segmenti di dati.
+La consegna dei dati segue una politica First-in-First-out lungo ciascuno dei due diversi flussi di dati (bassa e alta priorità).
+Dopo le operazioni di lettura, i dati letti scompaiono dal flusso.
+Inoltre, il flusso di dati ad alta priorità deve offrire operazioni di scrittura sincrone mentre il flusso di dati a bassa priorità deve offrire un'esecuzione asincrona (basata sul lavoro ritardato) delle operazioni di scrittura,
+pur mantenendo l'interfaccia in grado di notificare in modo sincrono il risultato.
+Le operazioni di lettura vengono eseguite tutte in modo sincrono. Il driver del dispositivo dovrebbe supportare 128 dispositivi corrispondenti alla stessa quantità di numeri minori.
+
+Il driver del dispositivo deve implementare il supporto per il servizio ioctl(..) per gestire la sessione di I/O come segue:
+
+    impostazione del livello di priorità (alto o basso) per le operazioni
+    operazioni di lettura e scrittura di blocco rispetto a quelle non bloccanti
+    impostazione di un timeout che regola l'attivazione delle operazioni di blocco
+
+Dovrebbero essere implementati alcuni parametri e funzioni del modulo Linux per abilitare o disabilitare il file del dispositivo, in termini di un numero minore specifico.
+Se è disabilitato, qualsiasi tentativo di aprire una sessione dovrebbe fallire (ma le sessioni già aperte verranno comunque gestite).
+Ulteriori parametri aggiuntivi esposti tramite VFS dovrebbero fornire un'immagine dello stato attuale del dispositivo in base alle seguenti informazioni:
+
+    abilitato o disabilitato
+    numero di byte attualmente presenti nei due flussi (priorità alta vs bassa)
+    numero di thread attualmente in attesa di dati lungo i due flussi (priorità alta vs bassa)
