@@ -8,11 +8,12 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/fs.h>
-#include <linux/sched.h>	
+#include <linux/sched.h>
+#include <linux/slab.h>
 #include <linux/pid.h>		/* For pid types */
 #include <linux/tty.h>		/* For the tty declarations */
 #include <linux/version.h>	/* For LINUX_VERSION_CODE */
-#include "struct.h"
+#include "structs.h"
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Gabriele Tummolo");
@@ -56,7 +57,7 @@ static int dev_open(struct inode *inode, struct file *file) {
    if(minor >= MINORS){
 	   return -ENODEV;
    }
-   session = kzalloc(sizeof(session_state), GFP_ATOMIC);
+   session = kzalloc(sizeof(session), GFP_ATOMIC);
    session->priority = 0;
    session->type_op = 1;
    session->timeout = 0.0;
@@ -85,72 +86,20 @@ static int dev_release(struct inode *inode, struct file *file) {
 
 
 static ssize_t dev_write(struct file *filp, const char *buff, size_t len, loff_t *off) {
-
-  int minor = get_minor(filp);
-  int ret;
-  object_state *the_object;
-
-  the_object = objects + minor;
-  printk("%s: somebody called a write on dev with [major,minor] number [%d,%d]\n",MODNAME,get_major(filp),get_minor(filp));
-
-  //need to lock in any case
-  mutex_lock(&(the_object->operation_synchronizer));
-  if(*off >= OBJECT_MAX_SIZE) {//offset too large
- 	 mutex_unlock(&(the_object->operation_synchronizer));
-	 return -ENOSPC;//no space left on device
-  } 
-  if(*off > the_object->valid_bytes) {//offset bwyond the current stream size
- 	 mutex_unlock(&(the_object->operation_synchronizer));
-	 return -ENOSR;//out of stream resources
-  } 
-  if((OBJECT_MAX_SIZE - *off) < len) len = OBJECT_MAX_SIZE - *off;
-  ret = copy_from_user(&(the_object->stream_content[*off]),buff,len);
-  
-  *off += (len - ret);
-  the_object->valid_bytes = *off;
-  mutex_unlock(&(the_object->operation_synchronizer));
-
-  return len - ret;
+   printk("Non ancora implementato\n");
+   return 0;
 
 }
 
 static ssize_t dev_read(struct file *filp, char *buff, size_t len, loff_t *off) {
-
-  int minor = get_minor(filp);
-  int ret;
-  object_state *the_object;
-
-  the_object = objects + minor;
-  printk("%s: somebody called a read on dev with [major,minor] number [%d,%d]\n",MODNAME,get_major(filp),get_minor(filp));
-
-  //need to lock in any case
-  mutex_lock(&(the_object->operation_synchronizer));
-  if(*off > the_object->valid_bytes) {
- 	 mutex_unlock(&(the_object->operation_synchronizer));
-	 return 0;
-  } 
-  if((the_object->valid_bytes - *off) < len) len = the_object->valid_bytes - *off;
-  ret = copy_to_user(buff,&(the_object->stream_content[*off]),len);
-  
-  *off += (len - ret);
-  mutex_unlock(&(the_object->operation_synchronizer));
-
-  return len - ret;
-   printk("%s: somebody called a read on dev with [major,minor] number [%d,%d]\n",MODNAME,get_major(filp),get_minor(filp));
-
-  return 0;
+   printk("non ancora implementato\n");
+   return 0;
 
 }
 
 static long dev_ioctl(struct file *filp, unsigned int command, unsigned long param) {
 
-  int minor = get_minor(filp);
-  object_state *the_object;
-
-  the_object = objects + minor;
-  printk("%s: somebody called an ioctl on dev with [major,minor] number [%d,%d] and command %u \n",MODNAME,get_major(filp),get_minor(filp),command);
-
-  //do here whathever you would like to control the state of the device
+  printk("non ancora implementato\n");
   return 0;
 
 }
@@ -174,8 +123,8 @@ int init_module(void) {
 	for(i=0;i<MINORS;i++){
 
       //initialize wait queue
-      init_waitqueue_head(&object[i].queue[0]);
-      init_waitqueue_head(&object[i].queue[1]);
+      init_waitqueue_head(&objects[i].queue[0]);
+      init_waitqueue_head(&objects[i].queue[1]);
 
 		objects[i].valid_bytes[0] = 0;
       objects[i].valid_bytes[1] = 0;
@@ -185,8 +134,8 @@ int init_module(void) {
 		if(objects[i].stream_content == NULL || objects[i].stream_content == NULL) 
             goto revert_allocation;
       
-      mutex_init(&(object[i].operation_synchronizer[0]));
-      mutex_init(&(object[i].operation_synchronizer[0]));
+      mutex_init(&(objects[i].operation_synchronizer[0]));
+      mutex_init(&(objects[i].operation_synchronizer[0]));
 	}
 
 	Major = __register_chrdev(0, 0, 256, DEVICE_NAME, &fops);
@@ -204,7 +153,7 @@ int init_module(void) {
 revert_allocation:
 	for(;i>=0;i--){
 		free_page((unsigned long)objects[i].stream_content[0]);
-      free_page((unsigned long)object[i].stream_content[1]);
+      free_page((unsigned long)objects[i].stream_content[1]);
 	}
 	return -ENOMEM;
 }
