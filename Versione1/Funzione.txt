@@ -1,0 +1,16 @@
+Questa versione fa si che il driver può essere aperto in una sola sessione per volta!
+
+
+
+Step per funzionamento:
+	1) make all
+	2) make install
+	3) dmesg (per vedere le stampe di printk(KERN_INFO)
+	4) mknod /dev/mio-dev c "major-number" 0
+	5) echo 'ciao' > /dev/mio-dev (effettuo la scrittura sul driver)
+		5a) se non è possibile fare chmod 666 /dev/mio-dev
+	4) make unistall
+
+NB: al passo 4) il major-number viene specificato al passo 3)
+
+IMPORTANTE il device mio-dev rimane registrato
