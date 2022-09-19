@@ -12,3 +12,10 @@ typedef struct _device_info{
 	int valid_bytes[2];
 	char * stream_content[2];//the I/O node is a buffer in memory
 } device_info;
+
+
+int devices_state[MINORS];  //initially : 0 (ALL ENABLED)
+int bytes_high[MINORS];
+int bytes_low[MINORS];
+int thread_waiting_high[MINORS];
+int thread_waiting_low[MINORS]; 

@@ -18,6 +18,30 @@
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Gabriele Tummolo");
 
+#define MINORS 128
+
+int devices_state[MINORS];  //initially : 0 (ALL ENABLED)
+int bytes_high[MINORS];
+int bytes_low[MINORS];
+int thread_waiting_high[MINORS];
+int thread_waiting_low[MINORS]; 
+
+module_param_array(devices_state,int,NULL,0644);
+MODULE_PARM_DESC(devices_state,"Questo parametro da informazioni sullo stato dei device file! Se il valore = 0 è abilitato - Se il valore = 1 è disabilitato");
+
+module_param_array(bytes_high,int,NULL,0644);
+MODULE_PARM_DESC(bytes_high,"Questo parametro indica il numero di byte presenti sullo stream a alta priorità");
+
+module_param_array(bytes_low,int,NULL,0644);
+MODULE_PARM_DESC(bytes_low,"Questo parametro indica il numero di byte presenti sullo stream a bassa priorità");
+
+module_param_array(thread_waiting_high,int,NULL,0644);
+MODULE_PARM_DESC(thread_waiting_high,"Questo parametro il # di thread in attesa sulla coda ad alta priorità");
+
+module_param_array(thread_waiting_low,int,NULL,0644);
+MODULE_PARM_DESC(thread_waiting_low,"Questo parametro il # di thread in attesa sulla coda ad bassa priorità");
+
+
 #define MODNAME "CHAR DEV"
 
 
@@ -42,7 +66,6 @@ static int Major;            /* Major number assigned to broadcast device driver
 
 
 
-#define MINORS 128
 device_info objects[MINORS];
 
 #define OBJECT_MAX_SIZE  (4096) //just one page
@@ -92,8 +115,25 @@ static ssize_t dev_write(struct file *filp, const char *buff, size_t len, loff_t
 }
 
 static ssize_t dev_read(struct file *filp, char *buff, size_t len, loff_t *off) {
-   printk("non ancora implementato\n");
-   return 0;
+   int minor = get_minor(filp);
+   int ret;
+   device_info *the_object;
+   the_object = objects + minor;
+   //printk("%s: somebody called a write on dev with [major,minor] number [%d,%d]\n",MODNAME,get_major(filp),get_minor(filp));
+
+   session_info *session = filp->private_data;
+   tmp_buffer  = kzalloc(sizeof(char)*len,GPL_ATOMIC);
+   memset(tmp_buff,0,len); //Pulizia buffer temporaneo
+
+   if(session->priority == 0){
+
+
+   }else{
+
+   }
+   ret = copy_to_user(buff,tmp_buff,len);
+   kfree(tmp_buffer);
+   return len-ret;
 
 }
 
