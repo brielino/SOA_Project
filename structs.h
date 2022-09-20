@@ -1,3 +1,5 @@
+#define MINORS 128
+
 /* Strutture principali utilizzate */
 typedef struct _session_info{
 	int priority; //Priorità Alta 0 (High) , Priorità Bassa 1 (Low) 
@@ -7,8 +9,8 @@ typedef struct _session_info{
 
 
 typedef struct _device_info{
-	struct mutex operation_synchronizer[2]; // Mutex per il due livelli di priorità
-	wait_queue_head_t queue[2];
+	struct mutex mutex_op[2]; // Mutex per i due livelli di priorità - 0 Alta Priorità / 1 Bassa Priorità
+	wait_queue_head_t wait_queue[2]; // 0 Alta Priorità - 1 Bassa priorità
 	int valid_bytes[2];
 	char * stream_content[2];//the I/O node is a buffer in memory
 } device_info;

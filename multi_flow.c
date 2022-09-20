@@ -20,11 +20,6 @@ MODULE_AUTHOR("Gabriele Tummolo");
 
 #define MINORS 128
 
-int devices_state[MINORS];  //initially : 0 (ALL ENABLED)
-int bytes_high[MINORS];
-int bytes_low[MINORS];
-int thread_waiting_high[MINORS];
-int thread_waiting_low[MINORS]; 
 
 module_param_array(devices_state,int,NULL,0644);
 MODULE_PARM_DESC(devices_state,"Questo parametro da informazioni sullo stato dei device file! Se il valore = 0 è abilitato - Se il valore = 1 è disabilitato");
@@ -51,6 +46,29 @@ static int dev_release(struct inode *, struct file *);
 static ssize_t dev_write(struct file *, const char *, size_t, loff_t *);
 
 #define DEVICE_NAME "my-new-dev"  /* Device file name in /dev/ - not mandatory  */
+
+bool take_lock(session_info *session,struct mutex * mutex, wait_queue_head_t * wait_queue){
+   if(session->type_op == 0){  //non bloccante
+      if(mutex_trylock(mutex) == 1) // lock preso
+      {  
+         return true;  
+      } 
+      else //lock non preso
+      {
+         printk("[Non-Blocking op]=> PID: %d; NAME: %s - CAN'T DO THE OPERATION\n", current->pid, current->comm);
+         return false;// return to the caller 
+      }
+   }
+   else
+   {
+      if(wait_event_timeout(*wait_queue, (mutex_trylock(mutex) == 1), (session->timeout * HZ)/1000) == 0){
+         printk("[Blocking op]=> PID: %d; NAME: %s - TIMEOUT EXPIRED\n", current ->pid, current->comm); //TIMEOUT EXPIRED
+         return false;
+      }else{
+         return true;
+      }
+   } 
+}
 
 
 static int Major;            /* Major number assigned to broadcast device driver */
@@ -117,21 +135,37 @@ static ssize_t dev_write(struct file *filp, const char *buff, size_t len, loff_t
 static ssize_t dev_read(struct file *filp, char *buff, size_t len, loff_t *off) {
    int minor = get_minor(filp);
    int ret;
+   char * tmp_buffer;
    device_info *the_object;
+   session_info *session = filp->private_data;
    the_object = objects + minor;
    //printk("%s: somebody called a write on dev with [major,minor] number [%d,%d]\n",MODNAME,get_major(filp),get_minor(filp));
 
-   session_info *session = filp->private_data;
-   tmp_buffer  = kzalloc(sizeof(char)*len,GPL_ATOMIC);
-   memset(tmp_buff,0,len); //Pulizia buffer temporaneo
+   tmp_buffer  = kzalloc(sizeof(char)*len,GFP_ATOMIC);
+   memset(tmp_buffer,0,len); //Pulizia buffer temporaneo
 
-   if(session->priority == 0){
+   if(take_lock(session,&(the_object->mutex_op[session->priority]),&(the_object->wait_queue[session->priority]))){
 
-
+      if(len > the_object->valid_bytes[session->priority])
+      { //Verifica se il numero di byte da leggere sono maggiori dei byte disponibilià 
+              len = the_object->valid_bytes[session->priority];
+      }
+      //copy first len bytes to tmp buff
+      memmove(tmp_buffer, the_object->stream_content[session->priority],len);
+      //clear after reading 
+      memmove(the_object->stream_content[session->priority], the_object->stream_content[session->priority] + len,the_object->valid_bytes[session->priority]-len); //shift
+      memset(the_object->stream_content[session->priority]+ the_object->valid_bytes[session->priority] - len,0,len); //clear
+      the_object->stream_content[session->priority] = krealloc(the_object->stream_content[session->priority],the_object->valid_bytes[session->priority] - len,GFP_ATOMIC);
+      //resettig parameters 
+      the_object->valid_bytes[session->priority] -= len;
+      mutex_unlock(&(the_object->mutex_op[session->priority])); 
+      wake_up(&the_object->wait_queue[session->priority]);
    }else{
+      return 0;
+   }   
 
-   }
-   ret = copy_to_user(buff,tmp_buff,len);
+   
+   ret = copy_to_user(buff,tmp_buffer,len);
    kfree(tmp_buffer);
    return len-ret;
 
@@ -163,19 +197,16 @@ int init_module(void) {
 	for(i=0;i<MINORS;i++){
 
       //initialize wait queue
-      init_waitqueue_head(&objects[i].queue[0]);
-      init_waitqueue_head(&objects[i].queue[1]);
+      init_waitqueue_head(&objects[i].wait_queue[0]);
+      init_waitqueue_head(&objects[i].wait_queue[1]);
 
 		objects[i].valid_bytes[0] = 0;
       objects[i].valid_bytes[1] = 0;
-		objects[i].stream_content[0] = (char*)__get_free_page(GFP_KERNEL);
-      objects[i].stream_content[1] = (char*)__get_free_page(GFP_KERNEL);
-
-		if(objects[i].stream_content == NULL || objects[i].stream_content == NULL) 
-            goto revert_allocation;
+		objects[i].stream_content[0] = NULL;
+      objects[i].stream_content[1] = NULL;
       
-      mutex_init(&(objects[i].operation_synchronizer[0]));
-      mutex_init(&(objects[i].operation_synchronizer[0]));
+      mutex_init(&(objects[i].mutex_op[0]));
+      mutex_init(&(objects[i].mutex_op[0]));
 	}
 
 	Major = __register_chrdev(0, 0, 256, DEVICE_NAME, &fops);
@@ -189,13 +220,6 @@ int init_module(void) {
 	printk(KERN_INFO "%s: new device registered, it is assigned major number %d\n",MODNAME, Major);
 
 	return 0;
-
-revert_allocation:
-	for(;i>=0;i--){
-		free_page((unsigned long)objects[i].stream_content[0]);
-      free_page((unsigned long)objects[i].stream_content[1]);
-	}
-	return -ENOMEM;
 }
 
 void cleanup_module(void) {
