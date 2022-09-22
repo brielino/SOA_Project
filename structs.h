@@ -1,23 +1,25 @@
 #define MINORS 128
+#define MODNAME "CHAR DEV"
+#define DEVICE_NAME "my-new-dev"  /* Device file name in /dev/ - not mandatory  */
 
 /* Strutture principali utilizzate */
-typedef struct _session_info{
-	int priority; //Priorità Alta 0 (High) , Priorità Bassa 1 (Low) 
-	int type_op; // Operazione Bloccante 0, Operazione non Bloccante 1 
+typedef struct info_sessione{
+	int priorita; //Priorità Alta 0 (High) , Priorità Bassa 1 (Low) 
+	int tipo_operaz; // Operazione Bloccante 0, Operazione non Bloccante 1 
 	unsigned long timeout; //Timeout in millisecondi
-} session_info;
+} info_sessione;
 
 
-typedef struct _device_info{
+typedef struct info_device{
 	struct mutex mutex_op[2]; // Mutex per i due livelli di priorità - 0 Alta Priorità / 1 Bassa Priorità
-	wait_queue_head_t wait_queue[2]; // 0 Alta Priorità - 1 Bassa priorità
-	int valid_bytes[2];
-	char * stream_content[2];//the I/O node is a buffer in memory
-} device_info;
+	wait_queue_head_t coda_attesa[2]; // 0 Alta Priorità - 1 Bassa priorità
+	int bytes_validi[2];
+	char * streams[2];//the I/O node is a buffer in memory
+} info_device;
 
 
-int devices_state[MINORS];  //initially : 0 (ALL ENABLED)
-int bytes_high[MINORS];
-int bytes_low[MINORS];
-int thread_waiting_high[MINORS];
-int thread_waiting_low[MINORS]; 
+int stato_devices[MINORS];  //initially : 0 (ALL ENABLED)
+int byte_validi_alta_priorita[MINORS];
+int byte_validi_bassa_priorita[MINORS];
+int thread_in_attesa_alta_priorita[MINORS];
+int thread_in_attesa_bassa_priorita[MINORS]; 

@@ -18,60 +18,9 @@
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Gabriele Tummolo");
 
-#define MINORS 128
-
-
-module_param_array(devices_state,int,NULL,0644);
-MODULE_PARM_DESC(devices_state,"Questo parametro da informazioni sullo stato dei device file! Se il valore = 0 è abilitato - Se il valore = 1 è disabilitato");
-
-module_param_array(bytes_high,int,NULL,0644);
-MODULE_PARM_DESC(bytes_high,"Questo parametro indica il numero di byte presenti sullo stream a alta priorità");
-
-module_param_array(bytes_low,int,NULL,0644);
-MODULE_PARM_DESC(bytes_low,"Questo parametro indica il numero di byte presenti sullo stream a bassa priorità");
-
-module_param_array(thread_waiting_high,int,NULL,0644);
-MODULE_PARM_DESC(thread_waiting_high,"Questo parametro il # di thread in attesa sulla coda ad alta priorità");
-
-module_param_array(thread_waiting_low,int,NULL,0644);
-MODULE_PARM_DESC(thread_waiting_low,"Questo parametro il # di thread in attesa sulla coda ad bassa priorità");
-
-
-#define MODNAME "CHAR DEV"
-
-
-
-static int dev_open(struct inode *, struct file *);
-static int dev_release(struct inode *, struct file *);
-static ssize_t dev_write(struct file *, const char *, size_t, loff_t *);
-
-#define DEVICE_NAME "my-new-dev"  /* Device file name in /dev/ - not mandatory  */
-
-bool take_lock(session_info *session,struct mutex * mutex, wait_queue_head_t * wait_queue){
-   if(session->type_op == 0){  //non bloccante
-      if(mutex_trylock(mutex) == 1) // lock preso
-      {  
-         return true;  
-      } 
-      else //lock non preso
-      {
-         printk("[Non-Blocking op]=> PID: %d; NAME: %s - CAN'T DO THE OPERATION\n", current->pid, current->comm);
-         return false;// return to the caller 
-      }
-   }
-   else
-   {
-      if(wait_event_timeout(*wait_queue, (mutex_trylock(mutex) == 1), (session->timeout * HZ)/1000) == 0){
-         printk("[Blocking op]=> PID: %d; NAME: %s - TIMEOUT EXPIRED\n", current ->pid, current->comm); //TIMEOUT EXPIRED
-         return false;
-      }else{
-         return true;
-      }
-   } 
-}
-
 
 static int Major;            /* Major number assigned to broadcast device driver */
+info_device objects[MINORS];
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0)
 #define get_major(session)	MAJOR(session->f_inode->i_rdev)
@@ -84,25 +33,80 @@ static int Major;            /* Major number assigned to broadcast device driver
 
 
 
-device_info objects[MINORS];
+module_param_array(stato_devices,int,NULL,0644);
+MODULE_PARM_DESC(stato_devices,"Questo parametro da informazioni sullo stato dei device file! Se il valore = 0 è abilitato - Se il valore = 1 è disabilitato");
 
-#define OBJECT_MAX_SIZE  (4096) //just one page
+module_param_array(byte_validi_alta_priorita,int,NULL,0644);
+MODULE_PARM_DESC(byte_validi_alta_priorita,"Questo parametro indica il numero di byte presenti sullo stream a alta priorità");
+
+module_param_array(byte_validi_bassa_priorita,int,NULL,0644);
+MODULE_PARM_DESC(byte_validi_bassa_priorita,"Questo parametro indica il numero di byte presenti sullo stream a bassa priorità");
+
+module_param_array(thread_in_attesa_alta_priorita,int,NULL,0644);
+MODULE_PARM_DESC(thread_in_attesa_alta_priorita,"Questo parametro il # di thread in attesa sulla coda ad alta priorità");
+
+module_param_array(thread_in_attesa_bassa_priorita,int,NULL,0644);
+MODULE_PARM_DESC(thread_in_attesa_bassa_priorita,"Questo parametro il # di thread in attesa sulla coda ad bassa priorità");
 
 
-static int dev_open(struct inode *inode, struct file *file) {
+
+
+static int apertura_device(struct inode *, struct file *);
+static int rilascio_device(struct inode *, struct file *);
+static ssize_t lettura_device(struct file *, char *, size_t, loff_t *);
+static ssize_t scrittura_device(struct file *, const char *, size_t, loff_t *);
+static long ioctl_device(struct file *, unsigned int , unsigned long );
+
+static struct file_operations fops = {
+  .owner = THIS_MODULE,
+  .write = scrittura_device,
+  .read = lettura_device,
+  .open =  apertura_device,
+  .release = rilascio_device,
+  .unlocked_ioctl = ioctl_device
+};
+
+
+bool prendi_lock(info_sessione *sessione_c,struct mutex * mutex, wait_queue_head_t * coda_attesa){
+   if(sessione_c->tipo_operaz == 0){  //non bloccante
+      if(mutex_trylock(mutex) == 1) // lock preso
+      {  
+         return true;  
+      } 
+      else //lock non preso
+      {
+         printk("[Non-Blocking op]=> PID: %d; NAME: %s - CAN'T DO THE OPERATION\n", current->pid, current->comm);
+         return false;// return to the caller 
+      }
+   }
+   else
+   {
+      if(wait_event_timeout(*coda_attesa, (mutex_trylock(mutex) == 1), (sessione_c->timeout * HZ)/1000) == 0){
+         printk("[Blocking op]=> PID: %d; NAME: %s - TIMEOUT EXPIRED\n", current ->pid, current->comm); //TIMEOUT EXPIRED
+         return false;
+      }else{
+         return true;
+      }
+   } 
+}
+
+
+
+
+static int apertura_device(struct inode *inode, struct file *file) {
 
    int minor;
-   session_info *session;
+   info_sessione *sessione_c;
    minor = get_minor(file);
 
    if(minor >= MINORS){
 	   return -ENODEV;
    }
-   session = kzalloc(sizeof(session), GFP_ATOMIC);
-   session->priority = 0;
-   session->type_op = 1;
-   session->timeout = 0.0;
-   file->private_data = session;
+   sessione_c = kzalloc(sizeof(sessione_c), GFP_ATOMIC);
+   sessione_c->priorita = 0;
+   sessione_c->tipo_operaz = 1;
+   sessione_c->timeout = 0.0;
+   file->private_data = sessione_c;
 
    printk("%s: device file successfully opened for object with minor %d\n",MODNAME,minor);
    //device opened by a default nop
@@ -112,7 +116,7 @@ static int dev_open(struct inode *inode, struct file *file) {
 }
 
 
-static int dev_release(struct inode *inode, struct file *file) {
+static int rilascio_device(struct inode *inode, struct file *file) {
    int minor;
    minor = get_minor(file);
 
@@ -126,70 +130,97 @@ static int dev_release(struct inode *inode, struct file *file) {
 
 
 
-static ssize_t dev_write(struct file *filp, const char *buff, size_t len, loff_t *off) {
-   printk("Non ancora implementato\n");
+static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len, loff_t *off) {
+   /*
+   int minor = get_minor(filp);
+   int ret;
+   char * buffer_temporaneo;
+   int pr;
+   int bytes_validi;
+   info_device *the_object;
+   info_sessione *sessione_c = filp->private_data;
+   the_object = objects + minor;
+   pr = sessione_c->priorita;
+   bytes_validi = the_object->bytes_validi[pr];
+   printk("%s: somebody called a read on dev with [major,minor] number [%d,%d]\n",MODNAME,get_major(filp),get_minor(filp));
+   
+   buffer_temporaneo  = kzalloc(sizeof(char)*len,GFP_ATOMIC);
+   memset(buffer_temporaneo,0,len); //Pulizia buffer temporaneo
+   ret = copy_from_user(buffer_temporaneo, buff, len);
+   if(pr == 1) //Bassa priorità
+   {
+      //deffered work
+   }else if(prendi_lock(sessione_c,&(the_object->mutex_op[pr]),&(the_object->coda_attesa[pr]))){
+      the_object->streams[pr] = krealloc(&the_object->streams[pr],the_object->bytes_validi[pr] + len,GFP_ATOMIC);
+      memset(&the_object->streams[pr]+ the_object->bytes_validi[pr],0,len); //clear
+      strncat(&the_object->streams[pr],&buffer_temporaneo,len);
+      the_object->bytes_validi[pr] += len;
+      mutex_unlock(&(the_object->mutex_op[pr])); 
+      wake_up(&the_object->coda_attesa[pr]);
+   }else{
+      return 0;
+   }
+
+
+   return len - ret;*/
    return 0;
 
 }
 
-static ssize_t dev_read(struct file *filp, char *buff, size_t len, loff_t *off) {
+static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t *off) {
    int minor = get_minor(filp);
    int ret;
-   char * tmp_buffer;
-   device_info *the_object;
-   session_info *session = filp->private_data;
+   char * buffer_temporaneo;
+   int pr_c;
+   int bytes_validi;
+   info_device *the_object;
+   info_sessione *session = filp->private_data;
    the_object = objects + minor;
-   //printk("%s: somebody called a write on dev with [major,minor] number [%d,%d]\n",MODNAME,get_major(filp),get_minor(filp));
+   pr_c = session->priorita;
+   bytes_validi = the_object->bytes_validi[pr_c];
+   printk("%s: somebody called a read on dev with [major,minor] number [%d,%d]\n",MODNAME,get_major(filp),get_minor(filp));
+   
+   buffer_temporaneo  = kzalloc(sizeof(char)*len,GFP_ATOMIC);
+   memset(buffer_temporaneo,0,len); //Pulizia buffer temporaneo
 
-   tmp_buffer  = kzalloc(sizeof(char)*len,GFP_ATOMIC);
-   memset(tmp_buffer,0,len); //Pulizia buffer temporaneo
+   if(prendi_lock(session,&(the_object->mutex_op[pr_c]),&(the_object->coda_attesa[pr_c]))){
 
-   if(take_lock(session,&(the_object->mutex_op[session->priority]),&(the_object->wait_queue[session->priority]))){
-
-      if(len > the_object->valid_bytes[session->priority])
+      if(len > bytes_validi)
       { //Verifica se il numero di byte da leggere sono maggiori dei byte disponibilià 
-              len = the_object->valid_bytes[session->priority];
+              len = bytes_validi;
       }
-      //copy first len bytes to tmp buff
-      memmove(tmp_buffer, the_object->stream_content[session->priority],len);
-      //clear after reading 
-      memmove(the_object->stream_content[session->priority], the_object->stream_content[session->priority] + len,the_object->valid_bytes[session->priority]-len); //shift
-      memset(the_object->stream_content[session->priority]+ the_object->valid_bytes[session->priority] - len,0,len); //clear
-      the_object->stream_content[session->priority] = krealloc(the_object->stream_content[session->priority],the_object->valid_bytes[session->priority] - len,GFP_ATOMIC);
-      //resettig parameters 
-      the_object->valid_bytes[session->priority] -= len;
-      mutex_unlock(&(the_object->mutex_op[session->priority])); 
-      wake_up(&the_object->wait_queue[session->priority]);
+      //Copio il contenuto dello stream nel buffer temporaneo
+      memmove(&buffer_temporaneo, &the_object->streams[pr_c],len);
+      //Le 3 operazioni successive mi permetto di eliminare dallo stream i bytes che sono stati letti
+      memmove(&the_object->streams[pr_c], &the_object->streams[pr_c] + len,bytes_validi -len); //shift
+      memset(&the_object->streams[pr_c]+ (bytes_validi - len),0,len);
+      //Ri-dimensionamento dello stream dopo la lettura
+      the_object->streams[pr_c] = krealloc(&the_object->streams[pr_c],bytes_validi - len,GFP_ATOMIC);
+      //Aggiornamento dei bytes validi per lo stream considerato
+      the_object->bytes_validi[pr_c] -= len;
+      mutex_unlock(&(the_object->mutex_op[pr_c])); 
+      wake_up(&the_object->coda_attesa[pr_c]);
    }else{
       return 0;
    }   
 
    
-   ret = copy_to_user(buff,tmp_buffer,len);
-   kfree(tmp_buffer);
+   ret = copy_to_user(buff,buffer_temporaneo,len);
+   kfree(buffer_temporaneo);
    return len-ret;
 
 }
 
-static long dev_ioctl(struct file *filp, unsigned int command, unsigned long param) {
+static long ioctl_device(struct file *filp, unsigned int command, unsigned long param) {
 
   printk("non ancora implementato\n");
   return 0;
 
 }
 
-static struct file_operations fops = {
-  .owner = THIS_MODULE,//do not forget this
-  .write = dev_write,
-  .read = dev_read,
-  .open =  dev_open,
-  .release = dev_release,
-  .unlocked_ioctl = dev_ioctl
-};
 
 
-
-int init_module(void) {
+int inizializzazione_modulo(void) {
 
 	int i;
 
@@ -197,13 +228,13 @@ int init_module(void) {
 	for(i=0;i<MINORS;i++){
 
       //initialize wait queue
-      init_waitqueue_head(&objects[i].wait_queue[0]);
-      init_waitqueue_head(&objects[i].wait_queue[1]);
+      init_waitqueue_head(&objects[i].coda_attesa[0]);
+      init_waitqueue_head(&objects[i].coda_attesa[1]);
 
-		objects[i].valid_bytes[0] = 0;
-      objects[i].valid_bytes[1] = 0;
-		objects[i].stream_content[0] = NULL;
-      objects[i].stream_content[1] = NULL;
+		objects[i].bytes_validi[0] = 0;
+      objects[i].bytes_validi[1] = 0;
+		objects[i].streams[0] = NULL;
+      objects[i].streams[1] = NULL;
       
       mutex_init(&(objects[i].mutex_op[0]));
       mutex_init(&(objects[i].mutex_op[0]));
@@ -222,12 +253,12 @@ int init_module(void) {
 	return 0;
 }
 
-void cleanup_module(void) {
+void rilascio_modulo(void) {
 
 	int i;
 	for(i=0;i<MINORS;i++){
-		free_page((unsigned long)objects[i].stream_content[0]);
-      free_page((unsigned long)objects[i].stream_content[1]);
+		free_page((unsigned long)objects[i].streams[0]);
+      free_page((unsigned long)objects[i].streams[1]);
 	}
 
 	unregister_chrdev(Major, DEVICE_NAME);
