@@ -13,6 +13,7 @@
 #include <linux/pid.h>		/* For pid types */
 #include <linux/tty.h>		/* For the tty declarations */
 #include <linux/version.h>	/* For LINUX_VERSION_CODE */
+#include <linux/workqueue.h>
 #include "structs.h"
 
 MODULE_LICENSE("GPL");
@@ -21,6 +22,7 @@ MODULE_AUTHOR("Gabriele Tummolo");
 
 static int Major;            /* Major number assigned to broadcast device driver */
 info_device objects[MINORS];
+struct workqueue_struct * workqueue;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0)
 #define get_major(session)	MAJOR(session->f_inode->i_rdev)
@@ -31,7 +33,7 @@ info_device objects[MINORS];
 #endif
 
 
-
+void deferred_work(struct work_struct *work);
 
 module_param_array(stato_devices,int,NULL,0644);
 MODULE_PARM_DESC(stato_devices,"Questo parametro da informazioni sullo stato dei device file! Se il valore = 0 è abilitato - Se il valore = 1 è disabilitato");
@@ -55,7 +57,7 @@ static int apertura_device(struct inode *, struct file *);
 static int rilascio_device(struct inode *, struct file *);
 static ssize_t lettura_device(struct file *, char *, size_t, loff_t *);
 static ssize_t scrittura_device(struct file *, const char *, size_t, loff_t *);
-static long ioctl_device(struct file *, unsigned int , unsigned long );
+static long operazione_ioctl(struct file *, unsigned int , unsigned long );
 
 static struct file_operations fops = {
   .owner = THIS_MODULE,
@@ -63,8 +65,20 @@ static struct file_operations fops = {
   .read = lettura_device,
   .open =  apertura_device,
   .release = rilascio_device,
-  .unlocked_ioctl = ioctl_device
+  .unlocked_ioctl = operazione_ioctl
 };
+
+void deferred_work(struct work_struct *work){
+   return;
+}
+
+void chiama_deferred_work(struct file *filp, int ret, char** temp_buff, int len, data_work *data){
+   data->file = filp;
+   data->buffer =*temp_buff;
+   data->len = len;
+   INIT_WORK(&data->work,deferred_work);
+   queue_work(workqueue, &data->work);
+}
 
 
 bool prendi_lock(info_sessione *sessione_c,struct mutex * mutex, wait_queue_head_t * coda_attesa){
@@ -108,7 +122,7 @@ static int apertura_device(struct inode *inode, struct file *file) {
    sessione_c->timeout = 0.0;
    file->private_data = sessione_c;
 
-   printk("%s: device file successfully opened for object with minor %d\n",MODNAME,minor);
+   printk(KERN_INFO "%s: Device file aperto con successo per l'oggetto con minor number %d\n",MODNAME,minor);
    //device opened by a default nop
    return 0;
 
@@ -122,7 +136,7 @@ static int rilascio_device(struct inode *inode, struct file *file) {
 
    kfree(file->private_data);
 
-   printk("%s: device file closed\n",MODNAME);
+   printk(KERN_INFO "%s: Device file chiuso\n",MODNAME);
 
    return 0;
 
@@ -131,39 +145,38 @@ static int rilascio_device(struct inode *inode, struct file *file) {
 
 
 static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len, loff_t *off) {
-   /*
    int minor = get_minor(filp);
    int ret;
    char * buffer_temporaneo;
-   int pr;
+   int pr_c;
    int bytes_validi;
+   data_work *data;
    info_device *the_object;
    info_sessione *sessione_c = filp->private_data;
    the_object = objects + minor;
-   pr = sessione_c->priorita;
-   bytes_validi = the_object->bytes_validi[pr];
+   pr_c = sessione_c->priorita;
+   bytes_validi = the_object->bytes_validi[pr_c];
    printk("%s: somebody called a read on dev with [major,minor] number [%d,%d]\n",MODNAME,get_major(filp),get_minor(filp));
    
    buffer_temporaneo  = kzalloc(sizeof(char)*len,GFP_ATOMIC);
    memset(buffer_temporaneo,0,len); //Pulizia buffer temporaneo
    ret = copy_from_user(buffer_temporaneo, buff, len);
-   if(pr == 1) //Bassa priorità
+   if(pr_c == 1) //Bassa priorità
    {
-      //deffered work
-   }else if(prendi_lock(sessione_c,&(the_object->mutex_op[pr]),&(the_object->coda_attesa[pr]))){
-      the_object->streams[pr] = krealloc(&the_object->streams[pr],the_object->bytes_validi[pr] + len,GFP_ATOMIC);
-      memset(&the_object->streams[pr]+ the_object->bytes_validi[pr],0,len); //clear
-      strncat(&the_object->streams[pr],&buffer_temporaneo,len);
-      the_object->bytes_validi[pr] += len;
-      mutex_unlock(&(the_object->mutex_op[pr])); 
-      wake_up(&the_object->coda_attesa[pr]);
+      chiama_deferred_work(filp,ret, &buffer_temporaneo,len,data);
+   }else if(prendi_lock(sessione_c,&(the_object->mutex_op[pr_c]),&(the_object->coda_attesa[pr_c]))){
+      the_object->streams[pr_c] = krealloc(&the_object->streams[pr_c],the_object->bytes_validi[pr_c] + len,GFP_ATOMIC);
+      memset(&the_object->streams[pr_c]+ the_object->bytes_validi[pr_c],0,len); //clear
+      strncat(the_object->streams[pr_c],buffer_temporaneo,len);
+      the_object->bytes_validi[pr_c] += len;
+      mutex_unlock(&(the_object->mutex_op[pr_c])); 
+      wake_up(&the_object->coda_attesa[pr_c]);
    }else{
       return 0;
    }
 
 
-   return len - ret;*/
-   return 0;
+   return len - ret;
 
 }
 
@@ -178,9 +191,10 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
    the_object = objects + minor;
    pr_c = session->priorita;
    bytes_validi = the_object->bytes_validi[pr_c];
-   printk("%s: somebody called a read on dev with [major,minor] number [%d,%d]\n",MODNAME,get_major(filp),get_minor(filp));
+   printk(KERN_INFO "%s: Lettura chiamata per il device con [major,minor] number [%d,%d]\n",MODNAME,get_major(filp),get_minor(filp));
    
    buffer_temporaneo  = kzalloc(sizeof(char)*len,GFP_ATOMIC);
+
    memset(buffer_temporaneo,0,len); //Pulizia buffer temporaneo
 
    if(prendi_lock(session,&(the_object->mutex_op[pr_c]),&(the_object->coda_attesa[pr_c]))){
@@ -211,7 +225,7 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
 
 }
 
-static long ioctl_device(struct file *filp, unsigned int command, unsigned long param) {
+static long operazione_ioctl(struct file *filp, unsigned int command, unsigned long param) {
 
   printk("non ancora implementato\n");
   return 0;
@@ -225,6 +239,7 @@ int inizializzazione_modulo(void) {
 	int i;
 
 	//initialize the drive internal state
+   workqueue = create_workqueue("workqueue");
 	for(i=0;i<MINORS;i++){
 
       //initialize wait queue
@@ -244,11 +259,11 @@ int inizializzazione_modulo(void) {
 	//actually allowed minors are directly controlled within this driver
 
 	if (Major < 0) {
-	  printk("%s: registering device failed\n",MODNAME);
+	  printk(KERN_ERR "%s: Registrazione device fallita\n",MODNAME);
 	  return Major;
 	}
 
-	printk(KERN_INFO "%s: new device registered, it is assigned major number %d\n",MODNAME, Major);
+	printk(KERN_INFO "%s: Device registrato con successo, il major number e' %d\n",MODNAME, Major);
 
 	return 0;
 }
@@ -263,7 +278,7 @@ void rilascio_modulo(void) {
 
 	unregister_chrdev(Major, DEVICE_NAME);
 
-	printk(KERN_INFO "%s: new device unregistered, it was assigned major number %d\n",MODNAME, Major);
+	printk(KERN_INFO "%s: Cancellazione Device effettuata con successo! Il Major number era %d\n",MODNAME, Major);
 
 	return;
 

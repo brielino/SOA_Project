@@ -17,6 +17,14 @@ typedef struct info_device{
 	char * streams[2];//the I/O node is a buffer in memory
 } info_device;
 
+typedef struct data_work{
+	struct file *file;
+	struct work_struct work;
+	char *buffer;
+	int len;
+	int offest;
+} data_work;
+
 
 int stato_devices[MINORS];  //initially : 0 (ALL ENABLED)
 int byte_validi_alta_priorita[MINORS];
