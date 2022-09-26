@@ -18,11 +18,10 @@ typedef struct info_device{
 } info_device;
 
 typedef struct data_work{
-	struct file *file;
+	int minor;
 	struct work_struct work;
 	char *buffer;
 	int len;
-	int offest;
 } data_work;
 
 
