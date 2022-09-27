@@ -290,7 +290,36 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
 
 static long operazione_ioctl(struct file *filp, unsigned int command, unsigned long param) {
 
-  printk("non ancora implementato\n");
+  int minor = get_minor(filp);
+  info_device *the_object;
+  info_sessione *session = filp->private_data;
+  the_object = objects + minor;
+  switch(command){
+      case 0: // modifica la priorità in alta
+         session->priorita = 0;
+         break;
+      case 1: // modifica priorità in bassa
+         session->priorita = 1;
+         break;
+      case 2: // modifica operazione in bloccante
+         session->tipo_operaz = 0;
+         break;
+      case 3: // modifica operazione in non-bloccante
+         session->tipo_operaz = 1;
+         break;
+      case 4: // modifica timeout espresso in millisecondi
+         session->timeout = param;
+         break;
+      case 5: // abilita Device
+         stato_devices[minor] = 0;
+         break;
+      case 6: // disabilita Device
+         stato_devices[minor] = 1;
+         break;
+      default:
+         printk("aaaaa");
+
+  }
   return 0;
 
 }
@@ -335,8 +364,10 @@ void rilascio_modulo(void) {
 
 	int i;
 	for(i=0;i<MINORS;i++){
-		free_page((unsigned long)objects[i].streams[0]);
-      free_page((unsigned long)objects[i].streams[1]);
+      flush_workqueue(workqueue);
+      destroy_workqueue(workqueue);
+		kfree(objects[i].streams[0]);
+      kfree(objects[i].streams[1]);
 	}
 
 	unregister_chrdev(Major, DEVICE_NAME);
