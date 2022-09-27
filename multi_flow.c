@@ -68,6 +68,40 @@ static struct file_operations fops = {
   .unlocked_ioctl = operazione_ioctl
 };
 
+//operazione : 0 aggiungi - 1 sottrai
+//tipo : 0 thread - 1 byte
+void aggiorna_variabili(int priorita,int minor,int operazione,int tipo){
+   if(priorita == 0){
+      if(operazione == 0){
+         if(tipo == 0){
+            __sync_fetch_and_add(&thread_in_attesa_alta_priorita[minor],1);
+         }else{
+            __sync_fetch_and_add(&byte_validi_alta_priorita[minor],1);
+         }
+      }else{
+         if(tipo == 0){
+            __sync_fetch_and_sub(&thread_in_attesa_alta_priorita[minor],1);
+         }else{
+            __sync_fetch_and_sub(&byte_validi_alta_priorita[minor],1);
+         }
+      }
+   }else{
+      if(operazione == 0){
+         if(tipo == 0){
+            __sync_fetch_and_add(&thread_in_attesa_bassa_priorita[minor],1);
+         }else{
+            __sync_fetch_and_add(&byte_validi_bassa_priorita[minor],1);
+         }
+      }else{
+         if(tipo == 0){
+            __sync_fetch_and_sub(&thread_in_attesa_bassa_priorita[minor],1);
+         }else{
+            __sync_fetch_and_sub(&byte_validi_bassa_priorita[minor],1);
+         }
+      }
+   }
+}
+
 void deferred_work(struct work_struct *work){
    int minor;
    int len;
@@ -82,6 +116,9 @@ void deferred_work(struct work_struct *work){
    memset(&the_object->streams[1]+ the_object->bytes_validi[1],0,len); //clear
    strncat(the_object->streams[1],data->buffer,len);
    the_object->bytes_validi[1] += len;
+         //operazione : 0 aggiungi - 1 sottrai
+//tipo : 0 thread - 1 byte
+   aggiorna_variabili(0,minor,0,1);
    mutex_unlock(&(the_object->mutex_op[1])); 
 
    return;
@@ -95,7 +132,7 @@ void chiama_deferred_work(char** temp_buff, int len, data_work *data,int minor){
    queue_work(workqueue, &data->work);
 }
 
-bool prendi_lock(info_sessione *sessione_c,struct mutex * mutex, wait_queue_head_t * coda_attesa){
+bool prendi_lock(info_sessione *sessione_c,struct mutex * mutex, wait_queue_head_t * coda_attesa,int priorita,int minor){
    if(sessione_c->tipo_operaz == 0){  //non bloccante
       if(mutex_trylock(mutex) == 1) // lock preso
       {  
@@ -109,10 +146,13 @@ bool prendi_lock(info_sessione *sessione_c,struct mutex * mutex, wait_queue_head
    }
    else
    {
+      aggiorna_variabili(priorita,minor,0,0);
       if(wait_event_timeout(*coda_attesa, (mutex_trylock(mutex) == 1), (sessione_c->timeout * HZ)/1000) == 0){
          printk("[Blocking op]=> PID: %d; NAME: %s - TIMEOUT EXPIRED\n", current ->pid, current->comm); //TIMEOUT EXPIRED
+         aggiorna_variabili(priorita,minor,1,0);
          return false;
       }else{
+         aggiorna_variabili(priorita,minor,1,0);
          return true;
       }
    } 
@@ -138,11 +178,14 @@ static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len,
    if(pr_c == 1) //Bassa priorità
    {
       chiama_deferred_work(&buffer_temporaneo,len,data,minor);
-   }else if(prendi_lock(sessione_c,&(the_object->mutex_op[pr_c]),&(the_object->coda_attesa[pr_c]))){
+   }else if(prendi_lock(sessione_c,&(the_object->mutex_op[pr_c]),&(the_object->coda_attesa[pr_c]),pr_c,minor)){
       the_object->streams[pr_c] = krealloc(&the_object->streams[pr_c],the_object->bytes_validi[pr_c] + len,GFP_ATOMIC);
       memset(&the_object->streams[pr_c]+ the_object->bytes_validi[pr_c],0,len); //clear
       strncat(the_object->streams[pr_c],buffer_temporaneo,len);
       the_object->bytes_validi[pr_c] += len;
+      //operazione : 0 aggiungi - 1 sottrai
+//tipo : 0 thread - 1 byte
+      aggiorna_variabili(pr_c,minor,0,1);
       mutex_unlock(&(the_object->mutex_op[pr_c])); 
       wake_up(&the_object->coda_attesa[pr_c]);
    }else{
@@ -161,6 +204,11 @@ static int apertura_device(struct inode *inode, struct file *file) {
    int minor;
    info_sessione *sessione_c;
    minor = get_minor(file);
+
+   if(stato_devices[minor] == 1){
+      printk(KERN_ERR "Errore: Impossibile aprire una sessione su un Dispositivo Disabilitato!\n");
+      return 0;
+   }
 
    if(minor >= MINORS){
 	   return -ENODEV;
@@ -211,7 +259,7 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
 
    memset(buffer_temporaneo,0,len); //Pulizia buffer temporaneo
 
-   if(prendi_lock(session,&(the_object->mutex_op[pr_c]),&(the_object->coda_attesa[pr_c]))){
+   if(prendi_lock(session,&(the_object->mutex_op[pr_c]),&(the_object->coda_attesa[pr_c]),pr_c,minor)){
 
       if(len > bytes_validi)
       { //Verifica se il numero di byte da leggere sono maggiori dei byte disponibilià 
@@ -226,6 +274,7 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
       the_object->streams[pr_c] = krealloc(&the_object->streams[pr_c],bytes_validi - len,GFP_ATOMIC);
       //Aggiornamento dei bytes validi per lo stream considerato
       the_object->bytes_validi[pr_c] -= len;
+      aggiorna_variabili(pr_c,minor,1,1);
       mutex_unlock(&(the_object->mutex_op[pr_c])); 
       wake_up(&the_object->coda_attesa[pr_c]);
    }else{
