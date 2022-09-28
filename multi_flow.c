@@ -1,8 +1,4 @@
 
-/*  
- *  baseline char device driver with limitation on minor numbers - configurable in terms of concurrency 
- */
-
 #define EXPORT_SYMTAB
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -10,9 +6,9 @@
 #include <linux/fs.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
-#include <linux/pid.h>		/* For pid types */
-#include <linux/tty.h>		/* For the tty declarations */
-#include <linux/version.h>	/* For LINUX_VERSION_CODE */
+#include <linux/pid.h>
+#include <linux/tty.h>
+#include <linux/version.h>
 #include <linux/workqueue.h>
 #include "structs.h"
 
@@ -20,7 +16,7 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Gabriele Tummolo");
 
 
-static int Major;            /* Major number assigned to broadcast device driver */
+static int Major;
 info_device objects[MINORS];
 struct workqueue_struct * workqueue;
 
@@ -68,8 +64,7 @@ static struct file_operations fops = {
   .unlocked_ioctl = operazione_ioctl
 };
 
-//operazione : 0 aggiungi - 1 sottrai
-//tipo : 0 thread - 1 byte
+
 void aggiorna_variabili(int priorita,int minor,int operazione,int tipo){
    if(priorita == 0){
       if(operazione == 0){
@@ -113,11 +108,9 @@ void deferred_work(struct work_struct *work){
    the_object = objects + minor;
    mutex_lock(&(the_object->mutex_op[1])); 
    the_object->streams[1] = krealloc(&the_object->streams[1],the_object->bytes_validi[1] + len,GFP_ATOMIC);
-   memset(&the_object->streams[1]+ the_object->bytes_validi[1],0,len); //clear
+   memset(&the_object->streams[1]+ the_object->bytes_validi[1],0,len);
    strncat(the_object->streams[1],data->buffer,len);
    the_object->bytes_validi[1] += len;
-         //operazione : 0 aggiungi - 1 sottrai
-//tipo : 0 thread - 1 byte
    aggiorna_variabili(0,minor,0,1);
    mutex_unlock(&(the_object->mutex_op[1])); 
 
@@ -183,8 +176,6 @@ static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len,
       memset(&the_object->streams[pr_c]+ the_object->bytes_validi[pr_c],0,len); //clear
       strncat(the_object->streams[pr_c],buffer_temporaneo,len);
       the_object->bytes_validi[pr_c] += len;
-      //operazione : 0 aggiungi - 1 sottrai
-//tipo : 0 thread - 1 byte
       aggiorna_variabili(pr_c,minor,0,1);
       mutex_unlock(&(the_object->mutex_op[pr_c])); 
       wake_up(&the_object->coda_attesa[pr_c]);
@@ -220,7 +211,6 @@ static int apertura_device(struct inode *inode, struct file *file) {
    file->private_data = sessione_c;
 
    printk(KERN_INFO "%s: Device file aperto con successo per l'oggetto con minor number %d\n",MODNAME,minor);
-   //device opened by a default nop
    return 0;
 
 
@@ -268,7 +258,7 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
       //Copio il contenuto dello stream nel buffer temporaneo
       memmove(&buffer_temporaneo, &the_object->streams[pr_c],len);
       //Le 3 operazioni successive mi permetto di eliminare dallo stream i bytes che sono stati letti
-      memmove(&the_object->streams[pr_c], &the_object->streams[pr_c] + len,bytes_validi -len); //shift
+      memmove(&the_object->streams[pr_c], &the_object->streams[pr_c] + len,bytes_validi -len);
       memset(&the_object->streams[pr_c]+ (bytes_validi - len),0,len);
       //Ri-dimensionamento dello stream dopo la lettura
       the_object->streams[pr_c] = krealloc(&the_object->streams[pr_c],bytes_validi - len,GFP_ATOMIC);
@@ -330,11 +320,9 @@ int inizializzazione_modulo(void) {
 
 	int i;
 
-	//initialize the drive internal state
    workqueue = create_workqueue("workqueue");
 	for(i=0;i<MINORS;i++){
 
-      //initialize wait queue
       init_waitqueue_head(&objects[i].coda_attesa[0]);
       init_waitqueue_head(&objects[i].coda_attesa[1]);
 
@@ -348,7 +336,6 @@ int inizializzazione_modulo(void) {
 	}
 
 	Major = __register_chrdev(0, 0, 256, DEVICE_NAME, &fops);
-	//actually allowed minors are directly controlled within this driver
 
 	if (Major < 0) {
 	  printk(KERN_ERR "%s: Registrazione device fallita\n",MODNAME);
