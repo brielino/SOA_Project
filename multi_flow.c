@@ -317,50 +317,42 @@ static long operazione_ioctl(struct file *filp, unsigned int command, unsigned l
 
 
 int inizializzazione_modulo(void) {
-
-	int i;
-
+   int i;
    workqueue = create_workqueue("workqueue");
-	for(i=0;i<MINORS;i++){
-
+   for(i=0;i<MINORS;i++){
       init_waitqueue_head(&objects[i].coda_attesa[0]);
       init_waitqueue_head(&objects[i].coda_attesa[1]);
-
-		objects[i].bytes_validi[0] = 0;
+      objects[i].bytes_validi[0] = 0;
       objects[i].bytes_validi[1] = 0;
-		objects[i].streams[0] = NULL;
+      objects[i].streams[0] = NULL;
       objects[i].streams[1] = NULL;
-      
       mutex_init(&(objects[i].mutex_op[0]));
       mutex_init(&(objects[i].mutex_op[0]));
-	}
-
-	Major = __register_chrdev(0, 0, 256, DEVICE_NAME, &fops);
-
-	if (Major < 0) {
-	  printk(KERN_ERR "%s: Registrazione device fallita\n",MODNAME);
-	  return Major;
-	}
-
-	printk(KERN_INFO "%s: Device registrato con successo, il major number e' %d\n",MODNAME, Major);
-
-	return 0;
+   }
+   Major = __register_chrdev(0, 0, 256, DEVICE_NAME, &fops);
+   if (Major < 0) {
+      printk(KERN_ERR "%s: Registrazione device fallita\n",MODNAME);
+      return Major;
+   }
+   printk(KERN_INFO "%s: Device registrato con successo, il major number e' %d\n",MODNAME, Major);
+   return 0;
 }
 
 void rilascio_modulo(void) {
-
-	int i;
-	for(i=0;i<MINORS;i++){
-      flush_workqueue(workqueue);
-      destroy_workqueue(workqueue);
-		kfree(objects[i].streams[0]);
+   int i;
+   flush_workqueue(workqueue);
+   destroy_workqueue(workqueue);
+   for(i=0;i<MINORS;i++){
+      kfree(objects[i].streams[0]);
       kfree(objects[i].streams[1]);
-	}
+   }
+   unregister_chrdev(Major, DEVICE_NAME);
+   
+   printk(KERN_INFO "%s: Cancellazione Device effettuata con successo! Il Major number era %d\n",MODNAME, Major);
 
-	unregister_chrdev(Major, DEVICE_NAME);
-
-	printk(KERN_INFO "%s: Cancellazione Device effettuata con successo! Il Major number era %d\n",MODNAME, Major);
 
 	return;
 
 }
+module_init(inizializzazione_modulo);
+module_exit(rilascio_modulo);
