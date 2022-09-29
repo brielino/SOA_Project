@@ -126,25 +126,28 @@ void chiama_deferred_work(char** temp_buff, int len, data_work *data,int minor){
 }
 
 bool prendi_lock(info_sessione *sessione_c,struct mutex * mutex, wait_queue_head_t * coda_attesa,int priorita,int minor){
-   if(sessione_c->tipo_operaz == 0){  //non bloccante
+   if(sessione_c->tipo_operaz == 1){  //non bloccante
       if(mutex_trylock(mutex) == 1) // lock preso
       {  
+         printk(KERN_INFO "Lock preso operazione non bloccante\n");
          return true;  
       } 
       else //lock non preso
       {
-         printk("[Non-Blocking op]=> PID: %d; NAME: %s - CAN'T DO THE OPERATION\n", current->pid, current->comm);
+         printk(KERN_INFO "Lock non preso operazione non bloccante\n");
          return false;// return to the caller 
       }
    }
    else
    {
       aggiorna_variabili(priorita,minor,0,0);
+      printk(KERN_INFO "Provo a prendere il lock...\n");
       if(wait_event_timeout(*coda_attesa, (mutex_trylock(mutex) == 1), (sessione_c->timeout * HZ)/1000) == 0){
-         printk("[Blocking op]=> PID: %d; NAME: %s - TIMEOUT EXPIRED\n", current ->pid, current->comm); //TIMEOUT EXPIRED
+         printk(KERN_INFO "Lock per operazione bloccante non preso\n");
          aggiorna_variabili(priorita,minor,1,0);
          return false;
       }else{
+         printk(KERN_INFO "Lock preso operazione bloccante\n");
          aggiorna_variabili(priorita,minor,1,0);
          return true;
       }
@@ -207,7 +210,7 @@ static int apertura_device(struct inode *inode, struct file *file) {
    sessione_c = kzalloc(sizeof(sessione_c), GFP_ATOMIC);
    sessione_c->priorita = 0;
    sessione_c->tipo_operaz = 1;
-   sessione_c->timeout = 0.0;
+   sessione_c->timeout = 2;
    file->private_data = sessione_c;
 
    printk(KERN_INFO "%s: Device file aperto con successo per l'oggetto con minor number %d\n",MODNAME,minor);
@@ -285,31 +288,31 @@ static long operazione_ioctl(struct file *filp, unsigned int command, unsigned l
   info_sessione *session = filp->private_data;
   the_object = objects + minor;
   switch(command){
-      case 0: // modifica la priorità in alta
+      case 10: // modifica la priorità in alta
          session->priorita = 0;
          printk(KERN_INFO "Cambio priorità ALTA\n");
          break;
-      case 1: // modifica priorità in bassa
+      case 11: // modifica priorità in bassa
          session->priorita = 1;
          printk(KERN_INFO "Cambio priorità BASSA\n");
          break;
-      case 2: // modifica operazione in bloccante
+      case 12: // modifica operazione in bloccante
          session->tipo_operaz = 0;
          printk(KERN_INFO "Cambio tipo operazione BLOCCANTE\n");
          break;
-      case 3: // modifica operazione in non-bloccante
+      case 13: // modifica operazione in non-bloccante
          session->tipo_operaz = 1;
          printk(KERN_INFO "Cambio tipo operazione NON BLOCCANTE\n");
          break;
-      case 4: // modifica timeout espresso in millisecondi
+      case 14: // modifica timeout espresso in millisecondi
          session->timeout = param;
-         printk(KERN_INFO "Cambio TIMEOUT = %d\n",param);
+         printk(KERN_INFO "Cambio TIMEOUT = %d\n",(int)param);
          break;
-      case 5: // abilita Device
+      case 15: // abilita Device
          stato_devices[minor] = 0;
          printk(KERN_INFO "Abiltazione Device con Minor %d\n",minor);
          break;
-      case 6: // disabilita Device
+      case 16: // disabilita Device
          stato_devices[minor] = 1;
          printk(KERN_INFO "Disabiltazione Device con Minor %d\n",minor);
          break;
