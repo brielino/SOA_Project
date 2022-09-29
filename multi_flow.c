@@ -287,27 +287,34 @@ static long operazione_ioctl(struct file *filp, unsigned int command, unsigned l
   switch(command){
       case 0: // modifica la priorità in alta
          session->priorita = 0;
+         printk(KERN_INFO "Cambio priorità ALTA\n");
          break;
       case 1: // modifica priorità in bassa
          session->priorita = 1;
+         printk(KERN_INFO "Cambio priorità BASSA\n");
          break;
       case 2: // modifica operazione in bloccante
          session->tipo_operaz = 0;
+         printk(KERN_INFO "Cambio tipo operazione BLOCCANTE\n");
          break;
       case 3: // modifica operazione in non-bloccante
          session->tipo_operaz = 1;
+         printk(KERN_INFO "Cambio tipo operazione NON BLOCCANTE\n");
          break;
       case 4: // modifica timeout espresso in millisecondi
          session->timeout = param;
+         printk(KERN_INFO "Cambio TIMEOUT = %d\n",param);
          break;
       case 5: // abilita Device
          stato_devices[minor] = 0;
+         printk(KERN_INFO "Abiltazione Device con Minor %d\n",minor);
          break;
       case 6: // disabilita Device
          stato_devices[minor] = 1;
+         printk(KERN_INFO "Disabiltazione Device con Minor %d\n",minor);
          break;
       default:
-         printk("aaaaa");
+         printk("Comando errato\n");
 
   }
   return 0;
