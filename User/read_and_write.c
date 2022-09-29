@@ -33,15 +33,15 @@ int main(int argc, char **argv){
     modal_op = strtol(argv[3],NULL,10);
     tipo_op = strtol(argv[4],NULL,10);
 
-    sprintf(comando,"sudo mknod %s c %d %i\n",PATH,major,0);
+    sprintf(comando,"mknod %s c %d %i\n",PATH,major,0);
     system(comando);
     if(tipo_op == 1){
         //lettura
         printf("E'stata scelta la lettura, per effettural indicare il numero di byte da leggere\n");
         scanf("%d",&numero_byte);
         
-
-        file = open(PATH, O_RDONLY);
+        messaggio = malloc(numero_byte);
+        file = open(PATH, O_RDWR);
         if(file < 0){
             printf("Apertura Device fallita\n");
         }
@@ -54,10 +54,9 @@ int main(int argc, char **argv){
         printf("il valore è %d\n",tipo_op);
         if(modal_op == 1){
             ioctl(file,12);
-            printf("BLOccante\n");
         }else{
             ioctl(file,13);
-            printf("NOn bloccante\n");
+
         }
 
         read(file, messaggio, numero_byte);
@@ -71,8 +70,8 @@ int main(int argc, char **argv){
 
     }else{
         printf("E'stata scelta la scrittura, per effetturla indicare la frase da scrivere\n");
-        scanf("%s",&messaggio);
-        file = open(PATH, O_RDONLY);
+        //scanf("%s",&messaggio);
+        file = open(PATH, O_RDWR);
         if(file < 0){
             printf("Apertura Device fallita\n");
         }
@@ -90,7 +89,7 @@ int main(int argc, char **argv){
             ioctl(file,13);
             printf("NOn bloccante\n");
         }
-        write(file, messaggio, strlen(messaggio));
+        write(file, "ciao", 4);
         //scrittura
     }
     sprintf(comando,"sudo rm %s \n",PATH);
