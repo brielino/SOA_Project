@@ -45,8 +45,19 @@ int main(int argc, char **argv){
         if(file < 0){
             printf("Apertura Device fallita\n");
         }
-        //Operazione di lettura
 
+        if(priorita == 1){
+            ioctl(file,10);
+        }else{
+            ioctl(file,11);
+        }
+
+        if(tipo_op == 0){
+            ioctl(file,12);
+        }else{
+            ioctl(file,13);
+        }
+        
         if(close(file) < 0){
             printf("File non chiuso con successo\n");
         }else{
