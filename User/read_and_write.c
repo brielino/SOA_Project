@@ -51,13 +51,17 @@ int main(int argc, char **argv){
         }else{
             ioctl(file,11);
         }
-
-        if(tipo_op == 0){
+        printf("il valore è %d\n",tipo_op);
+        if(modal_op == 1){
             ioctl(file,12);
+            printf("BLOccante\n");
         }else{
             ioctl(file,13);
+            printf("NOn bloccante\n");
         }
-        
+
+        read(file, messaggio, numero_byte);
+        printf("Messaggio %s\n", messaggio);
         if(close(file) < 0){
             printf("File non chiuso con successo\n");
         }else{
@@ -66,7 +70,27 @@ int main(int argc, char **argv){
     
 
     }else{
-        printf("Operazione di scrittura non ancora implementata\n");
+        printf("E'stata scelta la scrittura, per effetturla indicare la frase da scrivere\n");
+        scanf("%s",&messaggio);
+        file = open(PATH, O_RDONLY);
+        if(file < 0){
+            printf("Apertura Device fallita\n");
+        }
+
+        if(priorita == 1){
+            ioctl(file,10);
+        }else{
+            ioctl(file,11);
+        }
+        printf("il valore è %d\n",tipo_op);
+        if(modal_op == 1){
+            ioctl(file,12);
+            printf("BLOccante\n");
+        }else{
+            ioctl(file,13);
+            printf("NOn bloccante\n");
+        }
+        write(file, messaggio, strlen(messaggio));
         //scrittura
     }
     sprintf(comando,"sudo rm %s \n",PATH);
