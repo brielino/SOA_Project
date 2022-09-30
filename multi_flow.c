@@ -118,17 +118,12 @@ void deferred_work(struct work_struct *work){
 }
 
 void chiama_deferred_work(char** temp_buff, int len, data_work *data,int minor){
-   printk(KERN_INFO "1......ok\n");
    data = kzalloc(sizeof(data_work),GFP_KERNEL);
    data->minor = minor;
-   printk(KERN_INFO "2......ok\n");
    data->buffer =*temp_buff;
-   printk(KERN_INFO "3......ok\n");
    data->len = len;
    INIT_WORK(&data->work,deferred_work);
-   printk(KERN_INFO "4......ok\n");
    queue_work(workqueue, &data->work);
-   printk(KERN_INFO "5......ok\n");
 }
 
 bool prendi_lock(info_sessione *sessione_c,struct mutex * mutex, wait_queue_head_t * coda_attesa,int priorita,int minor){
@@ -175,7 +170,10 @@ static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len,
    printk(KERN_INFO "%s: Scrittura chiamata per il device con [major,minor] number [%d,%d]\n",MODNAME,get_major(filp),get_minor(filp));
    
    buffer_temporaneo  = kzalloc(sizeof(char)*len,GFP_ATOMIC);
-   
+   if(buffer_temporaneo == NULL){
+      printk(KERN_INFO "Allocazione buffer temporaneo per scrittura FALLITA\n");
+      return NULL;
+   }
 
    memset(buffer_temporaneo,0,len); //Pulizia buffer temporaneo
 
@@ -187,10 +185,8 @@ static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len,
       chiama_deferred_work(&buffer_temporaneo,len,data,minor);
    }else if(prendi_lock(sessione_c,&(the_object->mutex_op[pr_c]),&(the_object->coda_attesa[pr_c]),pr_c,minor)){
       the_object->streams[pr_c] = krealloc(the_object->streams[pr_c],the_object->bytes_validi[pr_c] + len,GFP_ATOMIC);
-      printk(KERN_INFO "2......ok\n");
 
       memset(&the_object->streams[pr_c]+ the_object->bytes_validi[pr_c],0,len); //clear
-      printk(KERN_INFO "3......ok\n");
 
       strncat(the_object->streams[pr_c],buffer_temporaneo,len);
       the_object->bytes_validi[pr_c] += len;
@@ -262,10 +258,14 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
    pr_c = session->priorita;
    bytes_validi = the_object->bytes_validi[pr_c];
    printk(KERN_INFO "%s: Lettura chiamata per il device con [major,minor] number [%d,%d]\n",MODNAME,get_major(filp),get_minor(filp));
-   
+   //Allocazione buffer temporaneo per copiare i dati da leggere
    buffer_temporaneo  = kzalloc(sizeof(char)*len,GFP_ATOMIC);
-
-   memset(buffer_temporaneo,0,len); //Pulizia buffer temporaneo
+   if(buffer_temporaneo == NULL){
+      printk(KERN_INFO "Allocazione buffer temporaneo per lettura FALLITA\n");
+      return NULL;
+   }
+   //Pulizia buffer temporaneo
+   memset(buffer_temporaneo,0,len); //necessario??
 
    if(prendi_lock(session,&(the_object->mutex_op[pr_c]),&(the_object->coda_attesa[pr_c]),pr_c,minor)){
 
@@ -343,7 +343,9 @@ static long operazione_ioctl(struct file *filp, unsigned int command, unsigned l
 
 int inizializzazione_modulo(void) {
    int i;
+   //Creazione Workqueue
    workqueue = create_workqueue("workqueue");
+   //Inizializzazione strutture per i minors
    for(i=0;i<MINORS;i++){
       init_waitqueue_head(&objects[i].coda_attesa[0]);
       init_waitqueue_head(&objects[i].coda_attesa[1]);
@@ -354,6 +356,7 @@ int inizializzazione_modulo(void) {
       mutex_init(&(objects[i].mutex_op[0]));
       mutex_init(&(objects[i].mutex_op[0]));
    }
+   //Registrazione device
    Major = __register_chrdev(0, 0, 256, DEVICE_NAME, &fops);
    if (Major < 0) {
       printk(KERN_ERR "%s: Registrazione device fallita\n",MODNAME);
@@ -365,12 +368,14 @@ int inizializzazione_modulo(void) {
 
 void rilascio_modulo(void) {
    int i;
+   //Flush e cancellazione della workqueue
    flush_workqueue(workqueue);
    destroy_workqueue(workqueue);
    for(i=0;i<MINORS;i++){
       kfree(objects[i].streams[0]);
       kfree(objects[i].streams[1]);
    }
+
    unregister_chrdev(Major, DEVICE_NAME);
    
    printk(KERN_INFO "%s: Cancellazione Device effettuata con successo! Il Major number era %d\n",MODNAME, Major);
