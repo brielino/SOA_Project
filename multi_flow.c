@@ -166,7 +166,7 @@ static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len,
    the_object = objects + minor;
    pr_c = sessione_c->priorita;
    bytes_validi = the_object->bytes_validi[pr_c];
-   printk(KERN_INFO "%s: Lettura chiamata per il device con [major,minor] number [%d,%d]\n",MODNAME,get_major(filp),get_minor(filp));
+   printk(KERN_INFO "%s: Scrittura chiamata per il device con [major,minor] number [%d,%d]\n",MODNAME,get_major(filp),get_minor(filp));
    
    buffer_temporaneo  = kzalloc(sizeof(char)*len,GFP_ATOMIC);
    
@@ -181,7 +181,7 @@ static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len,
       chiama_deferred_work(&buffer_temporaneo,len,data,minor);
    }else if(prendi_lock(sessione_c,&(the_object->mutex_op[pr_c]),&(the_object->coda_attesa[pr_c]),pr_c,minor)){
       printk(KERN_INFO "1......ok\n");
-      the_object->streams[pr_c] = krealloc(&the_object->streams[pr_c],the_object->bytes_validi[pr_c] + len,GFP_ATOMIC);
+      &the_object->streams[pr_c] = krealloc(&the_object->streams[pr_c],the_object->bytes_validi[pr_c] + len,GFP_ATOMIC);
       printk(KERN_INFO "2......ok\n");
 
       memset(&the_object->streams[pr_c]+ the_object->bytes_validi[pr_c],0,len); //clear
