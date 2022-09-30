@@ -108,7 +108,7 @@ void deferred_work(struct work_struct *work){
    the_object = objects + minor;
    mutex_lock(&(the_object->mutex_op[1])); 
    the_object->streams[1] = krealloc(the_object->streams[1],the_object->bytes_validi[1] + len,GFP_ATOMIC);
-   memset(&the_object->streams[1]+ the_object->bytes_validi[1],0,len);
+   memset(the_object->streams[1]+ the_object->bytes_validi[1],0,len);
    strncat(the_object->streams[1],data->buffer,len);
    the_object->bytes_validi[1] += len;
    aggiorna_variabili(0,minor,0,1);
@@ -172,7 +172,7 @@ static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len,
    buffer_temporaneo  = kzalloc(sizeof(char)*len,GFP_ATOMIC);
    if(buffer_temporaneo == NULL){
       printk(KERN_INFO "Allocazione buffer temporaneo per scrittura FALLITA\n");
-      return NULL;
+      return -1;
    }
 
    memset(buffer_temporaneo,0,len); //Pulizia buffer temporaneo
@@ -186,7 +186,7 @@ static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len,
    }else if(prendi_lock(sessione_c,&(the_object->mutex_op[pr_c]),&(the_object->coda_attesa[pr_c]),pr_c,minor)){
       the_object->streams[pr_c] = krealloc(the_object->streams[pr_c],the_object->bytes_validi[pr_c] + len,GFP_ATOMIC);
 
-      memset(&the_object->streams[pr_c]+ the_object->bytes_validi[pr_c],0,len); //clear
+      memset(the_object->streams[pr_c]+ the_object->bytes_validi[pr_c],0,len); //clear
 
       strncat(the_object->streams[pr_c],buffer_temporaneo,len);
       the_object->bytes_validi[pr_c] += len;
@@ -262,7 +262,7 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
    buffer_temporaneo  = kzalloc(sizeof(char)*len,GFP_ATOMIC);
    if(buffer_temporaneo == NULL){
       printk(KERN_INFO "Allocazione buffer temporaneo per lettura FALLITA\n");
-      return NULL;
+      return -1;
    }
    //Pulizia buffer temporaneo
    memset(buffer_temporaneo,0,len); //necessario??
@@ -273,13 +273,19 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
       { //Verifica se il numero di byte da leggere sono maggiori dei byte disponibilià 
               len = bytes_validi;
       }
+      
+      printk(KERN_INFO "Numero caratteri PRIMA della lettura per lo stream [%d] = %ld \n",pr_c,sizeof(the_object->streams[pr_c]));
       //Copio il contenuto dello stream nel buffer temporaneo
-      memmove(&buffer_temporaneo, &the_object->streams[pr_c],len);
+      memmove(buffer_temporaneo, the_object->streams[pr_c],len);
+      printk("1...\n");
       //Le 3 operazioni successive mi permetto di eliminare dallo stream i bytes che sono stati letti
-      memmove(&the_object->streams[pr_c], &the_object->streams[pr_c] + len,bytes_validi -len);
-      memset(&the_object->streams[pr_c]+ (bytes_validi - len),0,len);
+      memmove(the_object->streams[pr_c], the_object->streams[pr_c] + len,bytes_validi -len);
+      printk("2...\n");
+      memset(the_object->streams[pr_c]+ (bytes_validi - len),0,len);
+      printk("3...\n");
       //Ri-dimensionamento dello stream dopo la lettura
-      the_object->streams[pr_c] = krealloc(&the_object->streams[pr_c],bytes_validi - len,GFP_ATOMIC);
+      the_object->streams[pr_c] = krealloc(the_object->streams[pr_c],bytes_validi - len,GFP_ATOMIC);
+      printk(KERN_INFO "Numero caratteri DOPO la lettura per lo stream [%d] = %ld \n",pr_c,sizeof(the_object->streams[pr_c]));
       //Aggiornamento dei bytes validi per lo stream considerato
       the_object->bytes_validi[pr_c] -= len;
       aggiorna_variabili(pr_c,minor,1,1);
@@ -384,5 +390,6 @@ void rilascio_modulo(void) {
 	return;
 
 }
+
 module_init(inizializzazione_modulo);
 module_exit(rilascio_modulo);
