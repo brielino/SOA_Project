@@ -166,17 +166,27 @@ static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len,
    the_object = objects + minor;
    pr_c = sessione_c->priorita;
    bytes_validi = the_object->bytes_validi[pr_c];
-   printk("%s: somebody called a read on dev with [major,minor] number [%d,%d]\n",MODNAME,get_major(filp),get_minor(filp));
+   printk(KERN_INFO "%s: Lettura chiamata per il device con [major,minor] number [%d,%d]\n",MODNAME,get_major(filp),get_minor(filp));
    
    buffer_temporaneo  = kzalloc(sizeof(char)*len,GFP_ATOMIC);
+   
+
    memset(buffer_temporaneo,0,len); //Pulizia buffer temporaneo
+
    ret = copy_from_user(buffer_temporaneo, buff, len);
+
+
    if(pr_c == 1) //Bassa priorità
    {
       chiama_deferred_work(&buffer_temporaneo,len,data,minor);
    }else if(prendi_lock(sessione_c,&(the_object->mutex_op[pr_c]),&(the_object->coda_attesa[pr_c]),pr_c,minor)){
+      printk(KERN_INFO "1......ok\n");
       the_object->streams[pr_c] = krealloc(&the_object->streams[pr_c],the_object->bytes_validi[pr_c] + len,GFP_ATOMIC);
+      printk(KERN_INFO "2......ok\n");
+
       memset(&the_object->streams[pr_c]+ the_object->bytes_validi[pr_c],0,len); //clear
+      printk(KERN_INFO "3......ok\n");
+
       strncat(the_object->streams[pr_c],buffer_temporaneo,len);
       the_object->bytes_validi[pr_c] += len;
       aggiorna_variabili(pr_c,minor,0,1);
