@@ -107,7 +107,7 @@ void deferred_work(struct work_struct *work){
    minor = data->minor;
    the_object = objects + minor;
    mutex_lock(&(the_object->mutex_op[1])); 
-   the_object->streams[1] = krealloc(&the_object->streams[1],the_object->bytes_validi[1] + len,GFP_ATOMIC);
+   the_object->streams[1] = krealloc(the_object->streams[1],the_object->bytes_validi[1] + len,GFP_ATOMIC);
    memset(&the_object->streams[1]+ the_object->bytes_validi[1],0,len);
    strncat(the_object->streams[1],data->buffer,len);
    the_object->bytes_validi[1] += len;
@@ -118,11 +118,16 @@ void deferred_work(struct work_struct *work){
 }
 
 void chiama_deferred_work(char** temp_buff, int len, data_work *data,int minor){
+   printk(KERN_INFO "1......ok\n");
    data->minor = minor;
+   printk(KERN_INFO "2......ok\n");
    data->buffer =*temp_buff;
+   printk(KERN_INFO "3......ok\n");
    data->len = len;
    INIT_WORK(&data->work,deferred_work);
+   printk(KERN_INFO "4......ok\n");
    queue_work(workqueue, &data->work);
+   printk(KERN_INFO "5......ok\n");
 }
 
 bool prendi_lock(info_sessione *sessione_c,struct mutex * mutex, wait_queue_head_t * coda_attesa,int priorita,int minor){
@@ -180,8 +185,7 @@ static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len,
    {
       chiama_deferred_work(&buffer_temporaneo,len,data,minor);
    }else if(prendi_lock(sessione_c,&(the_object->mutex_op[pr_c]),&(the_object->coda_attesa[pr_c]),pr_c,minor)){
-      printk(KERN_INFO "1......ok\n");
-      &the_object->streams[pr_c] = krealloc(&the_object->streams[pr_c],the_object->bytes_validi[pr_c] + len,GFP_ATOMIC);
+      the_object->streams[pr_c] = krealloc(the_object->streams[pr_c],the_object->bytes_validi[pr_c] + len,GFP_ATOMIC);
       printk(KERN_INFO "2......ok\n");
 
       memset(&the_object->streams[pr_c]+ the_object->bytes_validi[pr_c],0,len); //clear
