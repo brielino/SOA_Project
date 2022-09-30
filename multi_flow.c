@@ -119,6 +119,7 @@ void deferred_work(struct work_struct *work){
 
 void chiama_deferred_work(char** temp_buff, int len, data_work *data,int minor){
    printk(KERN_INFO "1......ok\n");
+   data = kzalloc(sizeof(data_work),GFP_KERNEL);
    data->minor = minor;
    printk(KERN_INFO "2......ok\n");
    data->buffer =*temp_buff;
