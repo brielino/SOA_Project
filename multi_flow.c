@@ -65,6 +65,23 @@ static struct file_operations fops = {
 };
 
 
+
+/*
+ * Descrizione Funzione: aggiorna le variabili di stato del modulo
+ * ----------------------------
+ *   Valore ritorno : VOID
+ *
+ *   Parametri:  
+ *       priorita: valore per indicare il tipo di stream da utilizzare
+ *                 0 Alta priorità --- 1 Bassa Priorità
+ *       minor: minor del device
+ *       operazione: valore per indicare il tipo di operazione che si vuole
+ *                   effettuare, 0 Scrittura --- 1 Lettura
+ *       tipo: valore che indica il tipo di variabile di stato da aggiornare
+ *             0 Thread in attesa --- 1 Byte validi dello stream
+ *       bytes: the other real value
+ *   
+ */
 void aggiorna_variabili(int priorita,int minor,int operazione,int tipo,int bytes){
    if(priorita == 0){
       if(operazione == 0){
@@ -97,6 +114,15 @@ void aggiorna_variabili(int priorita,int minor,int operazione,int tipo,int bytes
    }
 }
 
+/*
+ * Descrizione Funzione: implementa la scrittura differita per lo stream a bassa priorità
+ * ----------------------------
+ *   Valore ritorno : VOID
+ *
+ *   Parametri:  
+ *       work: work_struct utilizzata per recuperare i dati della sessione
+ *   
+ */
 void deferred_work(struct work_struct *work){
    int minor;
    int len;
@@ -118,7 +144,20 @@ void deferred_work(struct work_struct *work){
    return;
 }
 
-
+/*
+ * Descrizione Funzione: funzione per l'acquisizione del lock dei due differenti stream
+ * ----------------------------
+ *   Valore ritorno : VOID
+ *
+ *   Parametri:  
+ *       sessione_c: struttura della sessione corrente
+ *       mutex: mutex utilizzato per lo stream corrente
+ *       coda_attesa: wait_queue
+ *       priorita: valore per indicare il tipo di stream da utilizzare
+ *                 0 Alta priorità --- 1 Bassa Priorità
+ *       minor: minor del device
+ *   
+ */
 bool prendi_lock(info_sessione *sessione_c,struct mutex * mutex, wait_queue_head_t * coda_attesa,int priorita,int minor){
    if(sessione_c->tipo_operaz == 1){  //non bloccante
       if(mutex_trylock(mutex) == 1) // lock preso
@@ -149,6 +188,18 @@ bool prendi_lock(info_sessione *sessione_c,struct mutex * mutex, wait_queue_head
    } 
 }
 
+/*
+ * Descrizione Funzione: funzione che effettua la strittura sul device
+ * ----------------------------
+ *   Valore ritorno : ssize_t
+ *
+ *   Parametri:  
+ *       filp: struttura dati
+ *       buff: buffer che contiene i byte che si vogliono scrivere
+ *       len: numero di byte che si vogliono scrivere
+ *       off: offset
+ *   
+ */
 static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len, loff_t *off) {
    int minor = get_minor(filp);
    int ret;
@@ -199,7 +250,16 @@ static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len,
 }
 
 
-
+/*
+ * Descrizione Funzione: funzione che effettua l'apertura della sessione per il device
+ * ----------------------------
+ *   Valore ritorno : int
+ *
+ *   Parametri:  
+ *       inode: struttura inode
+ *       file: struttura dati
+ *   
+ */
 static int apertura_device(struct inode *inode, struct file *file) {
 
    int minor;
@@ -226,7 +286,16 @@ static int apertura_device(struct inode *inode, struct file *file) {
 
 }
 
-
+/*
+ * Descrizione Funzione: funzione che effettua la chiusura della sessione per il device
+ * ----------------------------
+ *   Valore ritorno : int
+ *
+ *   Parametri:  
+ *       inode: struttura inode
+ *       file: struttura dati
+ *   
+ */
 static int rilascio_device(struct inode *inode, struct file *file) {
    int minor;
    minor = get_minor(file);
@@ -241,7 +310,18 @@ static int rilascio_device(struct inode *inode, struct file *file) {
 
 
 
-
+/*
+ * Descrizione Funzione: funzione che effettua la strittura sul device
+ * ----------------------------
+ *   Valore ritorno : ssize_t
+ *
+ *   Parametri:  
+ *       filp: struttura dati
+ *       buff: buffer -- non utilizzato
+ *       len: numero di byte che si vogliono leggere
+ *       off: offset
+ *   
+ */
 static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t *off) {
    int minor = get_minor(filp);
    int ret;
@@ -291,6 +371,18 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
 
 }
 
+/*
+ * Descrizione Funzione: funzione che permette di modificare la priorità,timeout e tipologia
+                         di operazione (Bloccante/Non Bloccante)
+ * ----------------------------
+ *   Valore ritorno : long
+ *
+ *   Parametri:  
+ *       filp: struttura dati
+ *       commandd: tipo di comando passato
+ *       param: parametro che permette di modificare il timeout
+ *   
+ */
 static long operazione_ioctl(struct file *filp, unsigned int command, unsigned long param) {
 
   int minor = get_minor(filp);
