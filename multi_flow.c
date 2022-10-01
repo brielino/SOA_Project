@@ -106,15 +106,14 @@ void deferred_work(struct work_struct *work){
    len = data->len;
    minor = data->minor;
    the_object = objects + minor;
-   printk(KERN_INFO "Inizio Deferred Write...\n");
+   printk(KERN_INFO "%s:Inizio Deferred Write...\n",MODNAME);
    mutex_lock(&(the_object->mutex_op[1])); 
    the_object->streams[1] = krealloc(the_object->streams[1],the_object->bytes_validi[1] + len,GFP_ATOMIC);
-   memset(the_object->streams[1]+ the_object->bytes_validi[1],0,len);
    strncat(the_object->streams[1],data->buffer,len);
    the_object->bytes_validi[1] += len;
    aggiorna_variabili(0,minor,0,1);
    mutex_unlock(&(the_object->mutex_op[1]));
-   printk(KERN_INFO "...Fine Deferred Write\n");
+   printk(KERN_INFO "%s:...Fine Deferred Write\n",MODNAME);
 
    return;
 }
@@ -124,12 +123,12 @@ bool prendi_lock(info_sessione *sessione_c,struct mutex * mutex, wait_queue_head
    if(sessione_c->tipo_operaz == 1){  //non bloccante
       if(mutex_trylock(mutex) == 1) // lock preso
       {  
-         printk(KERN_INFO "Lock preso operazione non bloccante\n");
+         printk(KERN_INFO "%s:Lock preso operazione non bloccante\n",MODNAME);
          return true;  
       } 
       else //lock non preso
       {
-         printk(KERN_INFO "Lock non preso operazione non bloccante\n");
+         printk(KERN_INFO "%s:Lock non preso operazione non bloccante\n",MODNAME);
          return false;// return to the caller 
       }
    }
@@ -137,13 +136,13 @@ bool prendi_lock(info_sessione *sessione_c,struct mutex * mutex, wait_queue_head
    {
       int timeout = msecs_to_jiffies(sessione_c->timeout);
       aggiorna_variabili(priorita,minor,0,0);
-      printk(KERN_INFO "Provo a prendere il lock...\n");
+      printk(KERN_INFO "%s:Provo a prendere il lock...\n",MODNAME);
       if(wait_event_timeout(*coda_attesa, (mutex_trylock(mutex) == 1), timeout) == 0){
-         printk(KERN_INFO "Lock per operazione bloccante non preso\n");
+         printk(KERN_INFO "%s:Lock per operazione bloccante non preso\n",MODNAME);
          aggiorna_variabili(priorita,minor,1,0);
          return false;
       }else{
-         printk(KERN_INFO "Lock preso operazione bloccante\n");
+         printk(KERN_INFO "%s:Lock preso operazione bloccante\n",MODNAME);
          aggiorna_variabili(priorita,minor,1,0);
          return true;
       }
@@ -166,11 +165,10 @@ static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len,
    
    buffer_temporaneo  = kzalloc(sizeof(char)*len,GFP_ATOMIC);
    if(buffer_temporaneo == NULL){
-      printk(KERN_INFO "Allocazione buffer temporaneo per scrittura FALLITA\n");
+      printk(KERN_INFO "%s:Allocazione buffer temporaneo per scrittura FALLITA\n",MODNAME);
       return -1;
    }
 
-   memset(buffer_temporaneo,0,len); //Pulizia buffer temporaneo
 
    ret = copy_from_user(buffer_temporaneo, buff, len);
 
@@ -185,8 +183,6 @@ static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len,
       queue_work(workqueue, &data->work);
    }else if(prendi_lock(sessione_c,&(the_object->mutex_op[pr_c]),&(the_object->coda_attesa[pr_c]),pr_c,minor)){
       the_object->streams[pr_c] = krealloc(the_object->streams[pr_c],the_object->bytes_validi[pr_c] + len,GFP_ATOMIC);
-
-      memset(the_object->streams[pr_c]+ the_object->bytes_validi[pr_c],0,len); //clear
 
       strncat(the_object->streams[pr_c],buffer_temporaneo,len);
       the_object->bytes_validi[pr_c] += len;
@@ -211,7 +207,7 @@ static int apertura_device(struct inode *inode, struct file *file) {
    minor = get_minor(file);
 
    if(stato_devices[minor] == 1){
-      printk(KERN_ERR "Errore: Impossibile aprire una sessione su un Dispositivo Disabilitato!\n");
+      printk(KERN_ERR "%s: Errore: Impossibile aprire una sessione su un Dispositivo Disabilitato!\n",MODNAME);
       return 0;
    }
 
@@ -261,11 +257,9 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
    //Allocazione buffer temporaneo per copiare i dati da leggere
    buffer_temporaneo  = kzalloc(sizeof(char)*len,GFP_ATOMIC);
    if(buffer_temporaneo == NULL){
-      printk(KERN_INFO "Allocazione buffer temporaneo per lettura FALLITA\n");
+      printk(KERN_ERR "%s:Allocazione buffer temporaneo per lettura FALLITA\n",MODNAME);
       return -1;
    }
-   //Pulizia buffer temporaneo
-   memset(buffer_temporaneo,0,len); //necessario??
 
    if(prendi_lock(session,&(the_object->mutex_op[pr_c]),&(the_object->coda_attesa[pr_c]),pr_c,minor)){
 
@@ -273,19 +267,14 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
       { //Verifica se il numero di byte da leggere sono maggiori dei byte disponibilià 
               len = bytes_validi;
       }
-      
-      printk(KERN_INFO "Numero caratteri PRIMA della lettura per lo stream [%d] = %ld \n",pr_c,sizeof(the_object->streams[pr_c]));
+      PRINTK(KERN_INFO "%s:Inizio Lettura di %d bytes per lo stream [%d]",MODNAME);
       //Copio il contenuto dello stream nel buffer temporaneo
       memmove(buffer_temporaneo, the_object->streams[pr_c],len);
-      printk("1...\n");
+      printk(KERN_INFO "%s:1...2...3\n",MODNAME);
       //Le 3 operazioni successive mi permetto di eliminare dallo stream i bytes che sono stati letti
       memmove(the_object->streams[pr_c], the_object->streams[pr_c] + len,bytes_validi -len);
-      printk("2...\n");
-      memset(the_object->streams[pr_c]+ (bytes_validi - len),0,len);
-      printk("3...\n");
       //Ri-dimensionamento dello stream dopo la lettura
       the_object->streams[pr_c] = krealloc(the_object->streams[pr_c],bytes_validi - len,GFP_ATOMIC);
-      printk(KERN_INFO "Numero caratteri DOPO la lettura per lo stream [%d] = %ld \n",pr_c,sizeof(the_object->streams[pr_c]));
       //Aggiornamento dei bytes validi per lo stream considerato
       the_object->bytes_validi[pr_c] -= len;
       aggiorna_variabili(pr_c,minor,1,1);
@@ -311,34 +300,34 @@ static long operazione_ioctl(struct file *filp, unsigned int command, unsigned l
   switch(command){
       case 10: // modifica la priorità in alta
          session->priorita = 0;
-         printk(KERN_INFO "Cambio priorità ALTA\n");
+         printk(KERN_INFO "%s:Cambio priorità ALTA\n",MODNAME);
          break;
       case 11: // modifica priorità in bassa
          session->priorita = 1;
-         printk(KERN_INFO "Cambio priorità BASSA\n");
+         printk(KERN_INFO "%s:Cambio priorità BASSA\n",MODNAME);
          break;
       case 12: // modifica operazione in bloccante
          session->tipo_operaz = 0;
-         printk(KERN_INFO "Cambio tipo operazione BLOCCANTE\n");
+         printk(KERN_INFO "%s:Cambio tipo operazione BLOCCANTE\n",MODNAME);
          break;
       case 13: // modifica operazione in non-bloccante
          session->tipo_operaz = 1;
-         printk(KERN_INFO "Cambio tipo operazione NON BLOCCANTE\n");
+         printk(KERN_INFO "%s:Cambio tipo operazione NON BLOCCANTE\n",MODNAME);
          break;
       case 14: // modifica timeout espresso in millisecondi
          session->timeout = param;
-         printk(KERN_INFO "Cambio TIMEOUT = %d\n",(int)param);
+         printk(KERN_INFO "%s:Cambio TIMEOUT = %d\n",MODNAME,(int)param);
          break;
       case 15: // abilita Device
          stato_devices[minor] = 0;
-         printk(KERN_INFO "Abiltazione Device con Minor %d\n",minor);
+         printk(KERN_INFO "%s:Abiltazione Device con Minor %d\n",MODNAME,minor);
          break;
       case 16: // disabilita Device
          stato_devices[minor] = 1;
-         printk(KERN_INFO "Disabiltazione Device con Minor %d\n",minor);
+         printk(KERN_INFO "%s:Disabiltazione Device con Minor %d\n",MODNAME,minor);
          break;
       default:
-         printk("Comando errato\n");
+         printk(KERN_INFO "%s:Comando errato\n",MODNAME);
 
   }
   return 0;
