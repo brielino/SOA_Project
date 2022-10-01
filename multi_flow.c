@@ -65,19 +65,19 @@ static struct file_operations fops = {
 };
 
 
-void aggiorna_variabili(int priorita,int minor,int operazione,int tipo){
+void aggiorna_variabili(int priorita,int minor,int operazione,int tipo,int bytes){
    if(priorita == 0){
       if(operazione == 0){
          if(tipo == 0){
             __sync_fetch_and_add(&thread_in_attesa_alta_priorita[minor],1);
          }else{
-            __sync_fetch_and_add(&byte_validi_alta_priorita[minor],1);
+            __sync_fetch_and_add(&byte_validi_alta_priorita[minor],bytes);
          }
       }else{
          if(tipo == 0){
             __sync_fetch_and_sub(&thread_in_attesa_alta_priorita[minor],1);
          }else{
-            __sync_fetch_and_sub(&byte_validi_alta_priorita[minor],1);
+            __sync_fetch_and_sub(&byte_validi_alta_priorita[minor],bytes);
          }
       }
    }else{
@@ -85,13 +85,13 @@ void aggiorna_variabili(int priorita,int minor,int operazione,int tipo){
          if(tipo == 0){
             __sync_fetch_and_add(&thread_in_attesa_bassa_priorita[minor],1);
          }else{
-            __sync_fetch_and_add(&byte_validi_bassa_priorita[minor],1);
+            __sync_fetch_and_add(&byte_validi_bassa_priorita[minor],bytes);
          }
       }else{
          if(tipo == 0){
             __sync_fetch_and_sub(&thread_in_attesa_bassa_priorita[minor],1);
          }else{
-            __sync_fetch_and_sub(&byte_validi_bassa_priorita[minor],1);
+            __sync_fetch_and_sub(&byte_validi_bassa_priorita[minor],bytes);
          }
       }
    }
@@ -111,7 +111,7 @@ void deferred_work(struct work_struct *work){
    the_object->streams[1] = krealloc(the_object->streams[1],the_object->bytes_validi[1] + len,GFP_ATOMIC);
    strncat(the_object->streams[1],data->buffer,len);
    the_object->bytes_validi[1] += len;
-   aggiorna_variabili(0,minor,0,1);
+   aggiorna_variabili(0,minor,0,1,len);
    mutex_unlock(&(the_object->mutex_op[1]));
    printk(KERN_INFO "%s:...Fine Deferred Write\n",MODNAME);
 
@@ -135,15 +135,15 @@ bool prendi_lock(info_sessione *sessione_c,struct mutex * mutex, wait_queue_head
    else
    {
       int timeout = msecs_to_jiffies(sessione_c->timeout);
-      aggiorna_variabili(priorita,minor,0,0);
+      aggiorna_variabili(priorita,minor,0,0,0);
       printk(KERN_INFO "%s:Provo a prendere il lock...\n",MODNAME);
       if(wait_event_timeout(*coda_attesa, (mutex_trylock(mutex) == 1), timeout) == 0){
          printk(KERN_INFO "%s:Lock per operazione bloccante non preso\n",MODNAME);
-         aggiorna_variabili(priorita,minor,1,0);
+         aggiorna_variabili(priorita,minor,1,0,0);
          return false;
       }else{
          printk(KERN_INFO "%s:Lock preso operazione bloccante\n",MODNAME);
-         aggiorna_variabili(priorita,minor,1,0);
+         aggiorna_variabili(priorita,minor,1,0,0);
          return true;
       }
    } 
@@ -186,7 +186,7 @@ static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len,
 
       strncat(the_object->streams[pr_c],buffer_temporaneo,len);
       the_object->bytes_validi[pr_c] += len;
-      aggiorna_variabili(pr_c,minor,0,1);
+      aggiorna_variabili(pr_c,minor,0,1,len);
       mutex_unlock(&(the_object->mutex_op[pr_c])); 
       wake_up(&the_object->coda_attesa[pr_c]);
    }else{
@@ -267,7 +267,7 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
       { //Verifica se il numero di byte da leggere sono maggiori dei byte disponibilià 
               len = bytes_validi;
       }
-      PRINTK(KERN_INFO "%s:Inizio Lettura di %d bytes per lo stream [%d]",MODNAME);
+      printk(KERN_INFO "%s:Inizio Lettura di %d bytes per lo stream [%d]",MODNAME);
       //Copio il contenuto dello stream nel buffer temporaneo
       memmove(buffer_temporaneo, the_object->streams[pr_c],len);
       printk(KERN_INFO "%s:1...2...3\n",MODNAME);
@@ -277,7 +277,7 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
       the_object->streams[pr_c] = krealloc(the_object->streams[pr_c],bytes_validi - len,GFP_ATOMIC);
       //Aggiornamento dei bytes validi per lo stream considerato
       the_object->bytes_validi[pr_c] -= len;
-      aggiorna_variabili(pr_c,minor,1,1);
+      aggiorna_variabili(pr_c,minor,1,1,len);
       mutex_unlock(&(the_object->mutex_op[pr_c])); 
       wake_up(&the_object->coda_attesa[pr_c]);
    }else{
