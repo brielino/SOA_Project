@@ -106,25 +106,19 @@ void deferred_work(struct work_struct *work){
    len = data->len;
    minor = data->minor;
    the_object = objects + minor;
+   printk(KERN_INFO "Inizio Deferred Write...\n");
    mutex_lock(&(the_object->mutex_op[1])); 
    the_object->streams[1] = krealloc(the_object->streams[1],the_object->bytes_validi[1] + len,GFP_ATOMIC);
    memset(the_object->streams[1]+ the_object->bytes_validi[1],0,len);
    strncat(the_object->streams[1],data->buffer,len);
    the_object->bytes_validi[1] += len;
    aggiorna_variabili(0,minor,0,1);
-   mutex_unlock(&(the_object->mutex_op[1])); 
+   mutex_unlock(&(the_object->mutex_op[1]));
+   printk(KERN_INFO "...Fine Deferred Write\n");
 
    return;
 }
 
-void chiama_deferred_work(char** temp_buff, int len, data_work *data,int minor){
-   data = kzalloc(sizeof(data_work),GFP_KERNEL);
-   data->minor = minor;
-   data->buffer =*temp_buff;
-   data->len = len;
-   INIT_WORK(&data->work,deferred_work);
-   queue_work(workqueue, &data->work);
-}
 
 bool prendi_lock(info_sessione *sessione_c,struct mutex * mutex, wait_queue_head_t * coda_attesa,int priorita,int minor){
    if(sessione_c->tipo_operaz == 1){  //non bloccante
@@ -141,9 +135,10 @@ bool prendi_lock(info_sessione *sessione_c,struct mutex * mutex, wait_queue_head
    }
    else
    {
+      int timeout = msecs_to_jiffies(sessione_c->timeout);
       aggiorna_variabili(priorita,minor,0,0);
       printk(KERN_INFO "Provo a prendere il lock...\n");
-      if(wait_event_timeout(*coda_attesa, (mutex_trylock(mutex) == 1), (sessione_c->timeout * HZ)/1000) == 0){
+      if(wait_event_timeout(*coda_attesa, (mutex_trylock(mutex) == 1), timeout) == 0){
          printk(KERN_INFO "Lock per operazione bloccante non preso\n");
          aggiorna_variabili(priorita,minor,1,0);
          return false;
@@ -182,7 +177,12 @@ static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len,
 
    if(pr_c == 1) //Bassa priorità
    {
-      chiama_deferred_work(&buffer_temporaneo,len,data,minor);
+      data = kzalloc(sizeof(data_work),GFP_KERNEL);
+      data->minor = minor;
+      data->buffer = buffer_temporaneo;
+      data->len = len;
+      INIT_WORK(&data->work,deferred_work);
+      queue_work(workqueue, &data->work);
    }else if(prendi_lock(sessione_c,&(the_object->mutex_op[pr_c]),&(the_object->coda_attesa[pr_c]),pr_c,minor)){
       the_object->streams[pr_c] = krealloc(the_object->streams[pr_c],the_object->bytes_validi[pr_c] + len,GFP_ATOMIC);
 
@@ -221,7 +221,7 @@ static int apertura_device(struct inode *inode, struct file *file) {
    sessione_c = kzalloc(sizeof(sessione_c), GFP_ATOMIC);
    sessione_c->priorita = 0;
    sessione_c->tipo_operaz = 1;
-   sessione_c->timeout = 2;
+   sessione_c->timeout = 3000;
    file->private_data = sessione_c;
 
    printk(KERN_INFO "%s: Device file aperto con successo per l'oggetto con minor number %d\n",MODNAME,minor);
