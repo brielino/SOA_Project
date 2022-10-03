@@ -174,7 +174,7 @@ bool prendi_lock(info_sessione *sessione_c,struct mutex * mutex, wait_queue_head
       //Lock non preso
       {
          printk(KERN_INFO "%s:Lock non preso operazione non bloccante\n",MODNAME);
-         return false 
+         return false;
       }
    }
    else
@@ -356,7 +356,7 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
       { //Verifica se il numero di byte da leggere sono maggiori dei byte disponibilià 
               len = bytes_validi;
       }
-      printk(KERN_INFO "%s:Inizio Lettura di %d bytes per lo stream [%d]",MODNAME);
+      printk(KERN_INFO "%s:Inizio Lettura di %d bytes per lo stream [%d]",MODNAME,len,pr_c);
       //Copio il contenuto dello stream nel buffer temporaneo
       memmove(buffer_temporaneo, the_object->streams[pr_c],len);
       printk(KERN_INFO "%s:1...2...3\n",MODNAME);
@@ -427,6 +427,11 @@ static long operazione_ioctl(struct file *filp, unsigned int command, unsigned l
          stato_devices[minor] = 1;
          printk(KERN_INFO "%s:Disabiltazione Device con Minor %d\n",MODNAME,minor);
          break;
+      case 7: // imposta dati di default
+         session->priorita = 0;
+         session->tipo_operaz = 1;
+         session->timeout = 3000;
+         printk(KERN_INFO "%s:Impostazioni di default aggiornate\n",MODNAME);
       default:
          printk(KERN_INFO "%s:Comando errato\n",MODNAME);
 
