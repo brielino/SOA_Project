@@ -10,7 +10,7 @@
 int main(int argc, char **argv){
     char comando[50];
     for(int i =0 ; i < 128; i++){
-        sprintf(comando,"sudo rm %s%s \n",PATH,i);
+        sprintf(comando,"sudo rm %s%d \n",PATH,i);
         system(comando);
     }
     return 0;
