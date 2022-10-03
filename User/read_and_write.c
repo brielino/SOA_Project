@@ -21,16 +21,15 @@ int main(int argc, char **argv){
     char *messaggio;
     char comando[1024];
     char nome_device[100] = "/dev/my-dev";
-    if(argc < 3){
-        printf("ATTENZIONE!! Per il corretto funzionamento del programma bisogna passare :\n    1° argomento Major Number\n");
-        printf("    2° argomento se si vuole effettuare una lettura o una scrittura (Indicare 1 per lettura -- 0 scrittura)\n");
-        printf("sudo nome_programma major lettura_scrittura\n");
+    if(argc < 2){
+        printf("ATTENZIONE!! Per il corretto funzionamento del programma bisogna passare :\n");
+        printf("    1° argomento se si vuole effettuare una lettura o una scrittura (Indicare 1 per lettura -- 0 scrittura)\n");
+        printf("sudo nome_programma lettura_scrittura\n");
 
         return 0;
     }
 
-    major = strtol(argv[1],NULL,10);
-    tipo_op = strtol(argv[2],NULL,10);
+    tipo_op = strtol(argv[1],NULL,10);
     printf("Vuoi mantenere le impostazioni di default?(y/n) ");
     scanf("%s",&yesorno);
     if(strcmp("y",&yesorno) ==0 || strcmp("Y",&yesorno) == 0){
@@ -55,7 +54,7 @@ int main(int argc, char **argv){
     if(tipo_op == 1){
         printf("E'stata scelta la lettura, per effettural indicare il numero di byte da leggere\n");
         scanf("%d",&numero_byte);
-        printf("Inserire il minor del device (valore compreso da 1 a 128):  \n");
+        printf("Inserire il minor del device (valore compreso da 0 a 128):  \n");
         scanf("%d",&minor);
         sprintf(minor_char,"%d",minor);
         strcat(nome_device,minor_char);
@@ -76,18 +75,17 @@ int main(int argc, char **argv){
     
 
     }else{
-        printf("E'stata scelta la scrittura, per effetturla indicare la frase da scrivere\n");
-        //scanf("%s",&messaggio);
+        printf("Inserire il minor del device (valore compreso da 0 a 128):  \n");
+        scanf("%d",&minor);
+        sprintf(minor_char,"%d",minor);
+        strcat(nome_device,minor_char);
         file = open(nome_device, O_RDWR);
         if(file < 0){
             printf("Apertura Device fallita\n");
         }
 
-        write(file, "ciao", 4);
-        //scrittura
+        write(file, "TestProva", 9);
     }
-    //sprintf(comando,"sudo rm %s \n",PATH);
-    //system(comando);
     return 0;
 
 }
