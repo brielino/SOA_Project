@@ -128,13 +128,16 @@ void deferred_work(struct work_struct *work){
    int len;
    data_work *data;
    info_device *the_object;
+   //Recupero informazioni
    data = container_of(work,data_work,work);
    len = data->len;
    minor = data->minor;
    the_object = objects + minor;
    printk(KERN_INFO "%s:Inizio Deferred Write...\n",MODNAME);
-   mutex_lock(&(the_object->mutex_op[1])); 
+   mutex_lock(&(the_object->mutex_op[1]));
+   //Ri-dimensionamento Stream
    the_object->streams[1] = krealloc(the_object->streams[1],the_object->bytes_validi[1] + len,GFP_ATOMIC);
+   //Scrittura sul buffer
    strncat(the_object->streams[1],data->buffer,len);
    the_object->bytes_validi[1] += len;
    aggiorna_variabili(0,minor,0,1,len);
@@ -159,16 +162,19 @@ void deferred_work(struct work_struct *work){
  *   
  */
 bool prendi_lock(info_sessione *sessione_c,struct mutex * mutex, wait_queue_head_t * coda_attesa,int priorita,int minor){
-   if(sessione_c->tipo_operaz == 1){  //non bloccante
-      if(mutex_trylock(mutex) == 1) // lock preso
+   if(sessione_c->tipo_operaz == 1){ 
+      //Operazione non bloccante
+      if(mutex_trylock(mutex) == 1) 
+      //Lock preso
       {  
          printk(KERN_INFO "%s:Lock preso operazione non bloccante\n",MODNAME);
          return true;  
       } 
-      else //lock non preso
+      else
+      //Lock non preso
       {
          printk(KERN_INFO "%s:Lock non preso operazione non bloccante\n",MODNAME);
-         return false;// return to the caller 
+         return false 
       }
    }
    else
@@ -224,7 +230,8 @@ static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len,
    ret = copy_from_user(buffer_temporaneo, buff, len);
 
 
-   if(pr_c == 1) //Bassa priorità
+   if(pr_c == 1)
+   //Bassa priorità
    {
       data = kzalloc(sizeof(data_work),GFP_KERNEL);
       data->minor = minor;
@@ -233,8 +240,10 @@ static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len,
       INIT_WORK(&data->work,deferred_work);
       queue_work(workqueue, &data->work);
    }else if(prendi_lock(sessione_c,&(the_object->mutex_op[pr_c]),&(the_object->coda_attesa[pr_c]),pr_c,minor)){
+      //Alta Priorità
+      //Ri-dimensionamento stream
       the_object->streams[pr_c] = krealloc(the_object->streams[pr_c],the_object->bytes_validi[pr_c] + len,GFP_ATOMIC);
-
+      //Scrittura sullo stream
       strncat(the_object->streams[pr_c],buffer_temporaneo,len);
       the_object->bytes_validi[pr_c] += len;
       aggiorna_variabili(pr_c,minor,0,1,len);
@@ -351,7 +360,7 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
       //Copio il contenuto dello stream nel buffer temporaneo
       memmove(buffer_temporaneo, the_object->streams[pr_c],len);
       printk(KERN_INFO "%s:1...2...3\n",MODNAME);
-      //Le 3 operazioni successive mi permetto di eliminare dallo stream i bytes che sono stati letti
+      //Le 2 operazioni successive mi permetto di eliminare dallo stream i bytes che sono stati letti
       memmove(the_object->streams[pr_c], the_object->streams[pr_c] + len,bytes_validi -len);
       //Ri-dimensionamento dello stream dopo la lettura
       the_object->streams[pr_c] = krealloc(the_object->streams[pr_c],bytes_validi - len,GFP_ATOMIC);
@@ -390,31 +399,31 @@ static long operazione_ioctl(struct file *filp, unsigned int command, unsigned l
   info_sessione *session = filp->private_data;
   the_object = objects + minor;
   switch(command){
-      case 10: // modifica la priorità in alta
+      case 0: // modifica la priorità in alta
          session->priorita = 0;
          printk(KERN_INFO "%s:Cambio priorità ALTA\n",MODNAME);
          break;
-      case 11: // modifica priorità in bassa
+      case 1: // modifica priorità in bassa
          session->priorita = 1;
          printk(KERN_INFO "%s:Cambio priorità BASSA\n",MODNAME);
          break;
-      case 12: // modifica operazione in bloccante
+      case 2: // modifica operazione in bloccante
          session->tipo_operaz = 0;
          printk(KERN_INFO "%s:Cambio tipo operazione BLOCCANTE\n",MODNAME);
          break;
-      case 13: // modifica operazione in non-bloccante
+      case 3: // modifica operazione in non-bloccante
          session->tipo_operaz = 1;
          printk(KERN_INFO "%s:Cambio tipo operazione NON BLOCCANTE\n",MODNAME);
          break;
-      case 14: // modifica timeout espresso in millisecondi
+      case 4: // modifica timeout espresso in millisecondi
          session->timeout = param;
          printk(KERN_INFO "%s:Cambio TIMEOUT = %d\n",MODNAME,(int)param);
          break;
-      case 15: // abilita Device
+      case 5: // abilita Device
          stato_devices[minor] = 0;
          printk(KERN_INFO "%s:Abiltazione Device con Minor %d\n",MODNAME,minor);
          break;
-      case 16: // disabilita Device
+      case 6: // disabilita Device
          stato_devices[minor] = 1;
          printk(KERN_INFO "%s:Disabiltazione Device con Minor %d\n",MODNAME,minor);
          break;
