@@ -19,24 +19,25 @@ int main(int argc, char **argv){
     int file;
     char *messaggio;
     char comando[1024];
-
     if(argc < 5){
-        printf("Funzionamento: Prog Major Alta-Bassa Bloccante-Non Bloccante Lettura-scrittura\n");
-        printf("Alta-Bassa : 1 Alta -- 0 Bassa\n");
-        printf("Bloccante-Non Bloccante : 1 Bloccante -- 0 Non Bloccante\n");
-        printf("Lettura-Scrittura : 1 Lettura -- 0 Scrittura\n");
+        printf("ATTENZIONE!! Per il corretto funzionamento del programma bisogna passare :\n    1° argomento Major Number\n");
+        printf("    2° argomento se si vuole effettuare una lettura o una scrittura (Indicare 1 per lettura -- 0 scrittura)\n");
+        printf("    3° argomento se si vuole un operazione bloccante o no (1 bloccante -- 0 non bloccante)\n");
+        printf("    4° argomento il tipo di priorità che si vuole adottare (1 alta prirità -- 0 bassa priorità)\n");
+        printf("Utilizzare il prefisso sudo\n");
+        printf("sudo nome_programma major lettura_scrittura bloc priorità\n");
+
         return 0;
     }
 
     major = strtol(argv[1],NULL,10);
-    priorita = strtol(argv[2],NULL,10);
+    tipo_op = strtol(argv[2],NULL,10);
     modal_op = strtol(argv[3],NULL,10);
-    tipo_op = strtol(argv[4],NULL,10);
+    priorita = strtol(argv[4],NULL,10);
 
     sprintf(comando,"mknod %s c %d %i\n",PATH,major,0);
     system(comando);
     if(tipo_op == 1){
-        //lettura
         printf("E'stata scelta la lettura, per effettural indicare il numero di byte da leggere\n");
         scanf("%d",&numero_byte);
         
