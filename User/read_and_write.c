@@ -30,6 +30,21 @@ int main(int argc, char **argv){
     }
 
     tipo_op = strtol(argv[1],NULL,10);
+    printf("Inserire il minor del device (valore compreso da 0 a 127):  \n");
+    scanf("%d",&minor);
+    if(minor < 0 || minor > 127){
+        printf("Errore il minor è sbagliato deve essere compreso tra 0 e 127\n");
+        return -1;
+    }
+    sprintf(minor_char,"%d",minor);
+    strcat(nome_device,minor_char);
+    messaggio = malloc(numero_byte);
+    file = open(nome_device, O_RDWR);
+    if(file < 0){
+        printf("Apertura Device fallita\n");
+        return -1;
+    }
+
     printf("Vuoi mantenere le impostazioni di default?(y/n) ");
     scanf("%s",&yesorno);
     if(strcmp("y",&yesorno) ==0 || strcmp("Y",&yesorno) == 0){
@@ -54,19 +69,10 @@ int main(int argc, char **argv){
     if(tipo_op == 1){
         printf("E'stata scelta la lettura, per effettural indicare il numero di byte da leggere\n");
         scanf("%d",&numero_byte);
-        printf("Inserire il minor del device (valore compreso da 0 a 128):  \n");
-        scanf("%d",&minor);
-        sprintf(minor_char,"%d",minor);
-        strcat(nome_device,minor_char);
-        messaggio = malloc(numero_byte);
-        file = open(nome_device, O_RDWR);
-        if(file < 0){
-            printf("Apertura Device fallita\n");
-        }
 
 
         read(file, messaggio, numero_byte);
-        printf("Messaggio letto da %s\n", messaggio);
+        printf("Lettura effettuata con successo\nMessaggio letto da %s\n", messaggio);
         if(close(file) < 0){
             printf("File non chiuso con successo\n");
         }else{
@@ -75,16 +81,8 @@ int main(int argc, char **argv){
     
 
     }else{
-        printf("Inserire il minor del device (valore compreso da 0 a 128):  \n");
-        scanf("%d",&minor);
-        sprintf(minor_char,"%d",minor);
-        strcat(nome_device,minor_char);
-        file = open(nome_device, O_RDWR);
-        if(file < 0){
-            printf("Apertura Device fallita\n");
-        }
-
         write(file, "TestProva", 9);
+        printf("Scrittura completata\n");
     }
     return 0;
 
