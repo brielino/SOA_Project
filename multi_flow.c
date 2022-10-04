@@ -140,7 +140,7 @@ void deferred_work(struct work_struct *work){
    //Scrittura sul buffer
    strncat(the_object->streams[1],data->buffer,len);
    the_object->bytes_validi[1] += len;
-   aggiorna_variabili(0,minor,0,1,len);
+   aggiorna_variabili(1,minor,0,1,len);
    mutex_unlock(&(the_object->mutex_op[1]));
    printk(KERN_INFO "%s:...Fine Deferred Write\n",MODNAME);
 
@@ -228,7 +228,6 @@ static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len,
 
 
    ret = copy_from_user(buffer_temporaneo, buff, len);
-
 
    if(pr_c == 1)
    //Bassa priorità
@@ -356,7 +355,7 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
       { //Verifica se il numero di byte da leggere sono maggiori dei byte disponibilià 
               len = bytes_validi;
       }
-      printk(KERN_INFO "%s:Inizio Lettura di %d bytes per lo stream [%d]",MODNAME,len,pr_c);
+      printk(KERN_INFO "%s:Inizio Lettura di %d bytes per lo stream [%d]",MODNAME,(int)len,pr_c);
       //Copio il contenuto dello stream nel buffer temporaneo
       memmove(buffer_temporaneo, the_object->streams[pr_c],len);
       printk(KERN_INFO "%s:1...2...3\n",MODNAME);
@@ -388,7 +387,7 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
  *
  *   Parametri:  
  *       filp: struttura dati
- *       commandd: tipo di comando passato
+ *       command: tipo di comando passato
  *       param: parametro che permette di modificare il timeout
  *   
  */
@@ -432,9 +431,10 @@ static long operazione_ioctl(struct file *filp, unsigned int command, unsigned l
          session->tipo_operaz = 1;
          session->timeout = 3000;
          printk(KERN_INFO "%s:Impostazioni di default aggiornate\n",MODNAME);
+         break;      
       default:
          printk(KERN_INFO "%s:Comando errato\n",MODNAME);
-
+         break;
   }
   return 0;
 
