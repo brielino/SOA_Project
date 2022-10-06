@@ -13,3 +13,6 @@ Finito di testare per smontare il modulo ritornare nella cartella principale e d
 
 Eliminare anche i device creati, andare nella cartella user e digitare
 -)sudo ./destroy
+
+E' possibile leggere i parametri del modulo tramite la cmd con il comando
+cat /sys/module/multi_flow/parameters/nome_varaibile (usare tab per suggerimento)
