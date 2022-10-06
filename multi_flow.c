@@ -17,7 +17,7 @@ MODULE_AUTHOR("Gabriele Tummolo");
 
 
 static int Major;
-info_device objects[MINORS];
+info_device devices[MINORS];
 struct workqueue_struct * workqueue;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0)
@@ -127,21 +127,21 @@ void deferred_work(struct work_struct *work){
    int minor;
    int len;
    data_work *data;
-   info_device *the_object;
+   info_device *current_device;
    //Recupero informazioni
    data = container_of(work,data_work,work);
    len = data->len;
    minor = data->minor;
-   the_object = objects + minor;
+   current_device = devices + minor;
    printk(KERN_INFO "%s:Inizio Deferred Write...\n",MODNAME);
-   mutex_lock(&(the_object->mutex_op[1]));
+   mutex_lock(&(current_device->mutex_op[1]));
    //Ri-dimensionamento Stream
-   the_object->streams[1] = krealloc(the_object->streams[1],the_object->bytes_validi[1] + len,GFP_ATOMIC);
+   current_device->streams[1] = krealloc(current_device->streams[1],current_device->bytes_validi[1] + len,GFP_ATOMIC);
    //Scrittura sul buffer
-   strncat(the_object->streams[1],data->buffer,len);
-   the_object->bytes_validi[1] += len;
+   strncat(current_device->streams[1],data->buffer,len);
+   current_device->bytes_validi[1] += len;
    aggiorna_variabili(1,minor,0,1,len);
-   mutex_unlock(&(the_object->mutex_op[1]));
+   mutex_unlock(&(current_device->mutex_op[1]));
    printk(KERN_INFO "%s:...Fine Deferred Write\n",MODNAME);
 
    return;
@@ -211,13 +211,11 @@ static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len,
    int ret;
    char * buffer_temporaneo;
    int pr_c;
-   int bytes_validi;
    data_work *data;
-   info_device *the_object;
+   info_device *current_device;
    info_sessione *sessione_c = filp->private_data;
-   the_object = objects + minor;
+   current_device = devices + minor;
    pr_c = sessione_c->priorita;
-   bytes_validi = the_object->bytes_validi[pr_c];
    printk(KERN_INFO "%s: Scrittura chiamata per il device con [major,minor] number [%d,%d]\n",MODNAME,get_major(filp),get_minor(filp));
    
    buffer_temporaneo  = kzalloc(sizeof(char)*len,GFP_ATOMIC);
@@ -238,16 +236,16 @@ static ssize_t scrittura_device(struct file *filp, const char *buff, size_t len,
       data->len = len;
       INIT_WORK(&data->work,deferred_work);
       queue_work(workqueue, &data->work);
-   }else if(prendi_lock(sessione_c,&(the_object->mutex_op[pr_c]),&(the_object->coda_attesa[pr_c]),pr_c,minor)){
+   }else if(prendi_lock(sessione_c,&(current_device->mutex_op[pr_c]),&(current_device->coda_attesa[pr_c]),pr_c,minor)){
       //Alta Priorità
       //Ri-dimensionamento stream
-      the_object->streams[pr_c] = krealloc(the_object->streams[pr_c],the_object->bytes_validi[pr_c] + len,GFP_ATOMIC);
+      current_device->streams[pr_c] = krealloc(current_device->streams[pr_c],current_device->bytes_validi[pr_c] + len,GFP_ATOMIC);
       //Scrittura sullo stream
-      strncat(the_object->streams[pr_c],buffer_temporaneo,len);
-      the_object->bytes_validi[pr_c] += len;
+      strncat(current_device->streams[pr_c],buffer_temporaneo,len);
+      current_device->bytes_validi[pr_c] += len;
       aggiorna_variabili(pr_c,minor,0,1,len);
-      mutex_unlock(&(the_object->mutex_op[pr_c])); 
-      wake_up(&the_object->coda_attesa[pr_c]);
+      mutex_unlock(&(current_device->mutex_op[pr_c])); 
+      wake_up(&current_device->coda_attesa[pr_c]);
    }else{
       return 0;
    }
@@ -336,11 +334,11 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
    char * buffer_temporaneo;
    int pr_c;
    int bytes_validi;
-   info_device *the_object;
+   info_device *current_device;
    info_sessione *session = filp->private_data;
-   the_object = objects + minor;
+   current_device = devices + minor;
    pr_c = session->priorita;
-   bytes_validi = the_object->bytes_validi[pr_c];
+   bytes_validi = current_device->bytes_validi[pr_c];
    printk(KERN_INFO "%s: Lettura chiamata per il device con [major,minor] number [%d,%d]\n",MODNAME,get_major(filp),get_minor(filp));
    //Allocazione buffer temporaneo per copiare i dati da leggere
    buffer_temporaneo  = kzalloc(sizeof(char)*len,GFP_ATOMIC);
@@ -349,7 +347,7 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
       return -1;
    }
 
-   if(prendi_lock(session,&(the_object->mutex_op[pr_c]),&(the_object->coda_attesa[pr_c]),pr_c,minor)){
+   if(prendi_lock(session,&(current_device->mutex_op[pr_c]),&(current_device->coda_attesa[pr_c]),pr_c,minor)){
 
       if(len > bytes_validi)
       { //Verifica se il numero di byte da leggere sono maggiori dei byte disponibilià 
@@ -357,17 +355,17 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
       }
       printk(KERN_INFO "%s:Inizio Lettura di %d bytes per lo stream [%d]",MODNAME,(int)len,pr_c);
       //Copio il contenuto dello stream nel buffer temporaneo
-      memmove(buffer_temporaneo, the_object->streams[pr_c],len);
+      memmove(buffer_temporaneo, current_device->streams[pr_c],len);
       printk(KERN_INFO "%s:1...2...3\n",MODNAME);
       //Le 2 operazioni successive mi permetto di eliminare dallo stream i bytes che sono stati letti
-      memmove(the_object->streams[pr_c], the_object->streams[pr_c] + len,bytes_validi -len);
+      memmove(current_device->streams[pr_c], current_device->streams[pr_c] + len,bytes_validi -len);
       //Ri-dimensionamento dello stream dopo la lettura
-      the_object->streams[pr_c] = krealloc(the_object->streams[pr_c],bytes_validi - len,GFP_ATOMIC);
+      current_device->streams[pr_c] = krealloc(current_device->streams[pr_c],bytes_validi - len,GFP_ATOMIC);
       //Aggiornamento dei bytes validi per lo stream considerato
-      the_object->bytes_validi[pr_c] -= len;
+      current_device->bytes_validi[pr_c] -= len;
       aggiorna_variabili(pr_c,minor,1,1,len);
-      mutex_unlock(&(the_object->mutex_op[pr_c])); 
-      wake_up(&the_object->coda_attesa[pr_c]);
+      mutex_unlock(&(current_device->mutex_op[pr_c])); 
+      wake_up(&current_device->coda_attesa[pr_c]);
    }else{
       return 0;
    }   
@@ -394,9 +392,9 @@ static ssize_t lettura_device(struct file *filp, char *buff, size_t len, loff_t 
 static long operazione_ioctl(struct file *filp, unsigned int command, unsigned long param) {
 
   int minor = get_minor(filp);
-  info_device *the_object;
+  info_device *current_device;
   info_sessione *session = filp->private_data;
-  the_object = objects + minor;
+  current_device = devices + minor;
   switch(command){
       case 0: // modifica la priorità in alta
          session->priorita = 0;
@@ -433,7 +431,7 @@ static long operazione_ioctl(struct file *filp, unsigned int command, unsigned l
          printk(KERN_INFO "%s:Impostazioni di default aggiornate\n",MODNAME);
          break;      
       default:
-         printk(KERN_INFO "%s:Comando errato\n",MODNAME);
+         printk(KERN_INFO "%s:Comando non riconosciuto\n",MODNAME);
          break;
   }
   return 0;
@@ -448,14 +446,14 @@ int inizializzazione_modulo(void) {
    workqueue = create_workqueue("workqueue");
    //Inizializzazione strutture per i minors
    for(i=0;i<MINORS;i++){
-      init_waitqueue_head(&objects[i].coda_attesa[0]);
-      init_waitqueue_head(&objects[i].coda_attesa[1]);
-      objects[i].bytes_validi[0] = 0;
-      objects[i].bytes_validi[1] = 0;
-      objects[i].streams[0] = NULL;
-      objects[i].streams[1] = NULL;
-      mutex_init(&(objects[i].mutex_op[0]));
-      mutex_init(&(objects[i].mutex_op[0]));
+      init_waitqueue_head(&devices[i].coda_attesa[0]);
+      init_waitqueue_head(&devices[i].coda_attesa[1]);
+      devices[i].bytes_validi[0] = 0;
+      devices[i].bytes_validi[1] = 0;
+      devices[i].streams[0] = NULL;
+      devices[i].streams[1] = NULL;
+      mutex_init(&(devices[i].mutex_op[0]));
+      mutex_init(&(devices[i].mutex_op[0]));
    }
    //Registrazione device
    Major = __register_chrdev(0, 0, 256, DEVICE_NAME, &fops);
@@ -473,8 +471,8 @@ void rilascio_modulo(void) {
    flush_workqueue(workqueue);
    destroy_workqueue(workqueue);
    for(i=0;i<MINORS;i++){
-      kfree(objects[i].streams[0]);
-      kfree(objects[i].streams[1]);
+      kfree(devices[i].streams[0]);
+      kfree(devices[i].streams[1]);
    }
 
    unregister_chrdev(Major, DEVICE_NAME);
