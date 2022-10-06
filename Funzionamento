@@ -8,8 +8,8 @@ Andare nella cartella user e seguire i seguenti passi:
 2)sudo ./create major number (identificato nel passo 3 dello step precedente)
 3)sudo ./read_and_write 
 
-Finito di testa per smontare il modulo ritornare nella cartella principale e digiatere
+Finito di testare per smontare il modulo ritornare nella cartella principale e digitare
 -)sudo make uninstall
 
-Eliminare anche i device creati: andare nella cartella user e digitare
+Eliminare anche i device creati, andare nella cartella user e digitare
 -)sudo ./destroy
