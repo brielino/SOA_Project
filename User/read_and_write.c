@@ -72,7 +72,7 @@ int main(int argc, char **argv){
 
 
         read(file, messaggio, numero_byte);
-        printf("Lettura effettuata con successo\nMessaggio letto da %s\n", messaggio);
+        printf("Lettura effettuata con successo\nMessaggio letto : %s \n", messaggio);
         if(close(file) < 0){
             printf("File non chiuso con successo\n");
         }else{
