@@ -2,7 +2,6 @@
 #define MODNAME "CHAR DEV"
 #define DEVICE_NAME "my-dev"
 
-/* Strutture principali utilizzate */
 typedef struct info_sessione{
 	int priorita; //Priorità Alta 0 (High) , Priorità Bassa 1 (Low) 
 	int tipo_operaz; // Operazione Bloccante 0, Operazione non Bloccante 1 
