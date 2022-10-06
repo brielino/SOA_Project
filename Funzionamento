@@ -1,0 +1,15 @@
+Andare nella cartella principale e seguire i seguenti passi:
+1)sudo make all
+2)sudo make install
+3)sudo dmesg, identificare il major number
+
+Andare nella cartella user e seguire i seguenti passi:
+1)sudo make all
+2)sudo ./create major number (identificato nel passo 3 dello step precedente)
+3)sudo ./read_and_write 
+
+Finito di testa per smontare il modulo ritornare nella cartella principale e digiatere
+-)sudo make uninstall
+
+Eliminare anche i device creati: andare nella cartella user e digitare
+-)sudo ./destroy
